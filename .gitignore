@@ -1,0 +1,169 @@
+
+*.log
+*.ini
+*.pickle
+
+# Airflow configuration
+airflow.cfg
+unittests.cfg
+airflow_login.py
+dbinit.py
+initdb.py
+secrets.py
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage*.xml
+*,cover
+.hypothesis/
+.pytest_cache
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+# *.log
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+/webserver_config.py
+
+# Scrapy stuff:
+.scrapy
+
+# PyBuilder
+target/
+
+# pyenv
+.python-version
+
+# SageMath parsed files
+*.sage.py
+
+# dotenv
+.env
+.autoenv*.zsh
+
+# virtualenv
+.venv*
+venv*
+ENV/
+
+# PyCharm
+.idea/
+*.iml
+
+# Visual Studio Code
+.vscode/
+
+# vim
+*.swp
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# OSX
+.DS_Store
+
+# SQL Server backups
+*.bkp
+
+# Spark
+rat-results.txt
+
+# Git stuff
+# Kubernetes generated templated files
+*.generated
+*.tar.gz
+scripts/ci/kubernetes/kube/.generated/airflow.yaml
+scripts/ci/kubernetes/docker/requirements.txt
+
+# Node & Webpack Stuff
+*.entry.js
+node_modules
+npm-debug.log*
+derby.log
+metastore_db
+
+
+/hive_scratch_dir/
+/.bash_aliases
+/.bash_history
+/.kube
+/.inputrc
+log.txt*
+
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Might be generated when you build wheels
+pip-wheel-metadata
+
+.pypirc
+
+/.docs-venv
+
+# Dev files
+/dev/packages.txt
+/dev/Dockerfile.pmc
+
+# Generated UI licenses
+licenses/LICENSES-ui.txt
+
+# Generated out dir
+
+/out
