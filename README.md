@@ -1,13 +1,13 @@
-# SAS Airflow&reg; Provider
+# SAS&reg; Airflow Provider
 
 ## Current major capabilities of the SAS&reg; Studio Flow Operator
 
-* Execute a Studio Flow stored either on the File System or in SAS Content
+* Execute a SAS Studio Flow stored either on the File System or in SAS Content
 * Select the Compute Context to be used for execution of a SAS Studio Flow
 * Specify whether SAS logs of a SAS Studio Flow execution should be returned and displayed in Airflow
 * Specify parameters (init_code, wrap_code) to be used for code generation
 * Honor return code of a SAS Studio Flow in Airflow. In particular, if a SAS Studio Flow fails, Airflow raises an exception as well and stops execution
-* Authentication via oauth token or via user/password (i.e. generation of oauth token prior to each call)
+* Authenticate via oauth token or via user/password (i.e. generation of oauth token prior to each call)
 
 
 ## Getting started
