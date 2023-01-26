@@ -35,5 +35,6 @@ task1 = SASStudioFlowOperator(task_id='demo_studio_flow_1.flw',
                               compute_context="SAS Studio compute context",
                               flow_codegen_init_code=False,
                               flow_codegen_wrap_code=False,
+                              connection_name='SAS Connection',
                               env_vars=environment_vars,
                               dag=dag)
