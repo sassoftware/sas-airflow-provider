@@ -55,9 +55,6 @@ class SasHook(BaseHook):
                       self.conn_id,
                       self.host)
 
-        # disable insecure HTTP requests warnings
-        urllib3.disable_warnings(InsecureRequestWarning)
-
         if not self.token:
             # base 64 encode the api client auth and pass in authorization header
             auth_str = f"{self.client_id}:{self.client_secret}"
@@ -69,7 +66,7 @@ class SasHook(BaseHook):
 
             self.log.info("Get oauth token (see README if this crashes)")
             response = requests.post(
-                f"{self.host}/SASLogon/oauth/token", data=payload, verify=False, headers=my_headers
+                f"{self.host}/SASLogon/oauth/token", data=payload, verify=True, headers=my_headers
             )
 
             if response.status_code != 200:
@@ -85,8 +82,8 @@ class SasHook(BaseHook):
         session.headers.update({"Accept": "application/json"})
         session.headers.update({"Content-Type": "application/json"})
 
-        # set to false if using self signed certs
-        session.verify = False
+        # If using self-signed certs, install the certificate into your system certificate store.
+        session.verify = True
 
         # prepend the root url for all operations on the session, so that consumers can just provide
         # resource uri without the protocol and host
