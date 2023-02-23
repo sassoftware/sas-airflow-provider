@@ -13,10 +13,10 @@
 ## Getting started
 ### Install Airflow
 Follow instructions at https://airflow.apache.org/docs/apache-airflow/stable/installation/index.html to install Airflow.
-If you just want to evaluate the SAS providers, then the simplest path would be to intall via PYPI and run Airflow on the local machine in a virtual environment. 
+If you just want to evaluate the SAS providers, then the simplest path would be to install via PYPI and run Airflow on the local machine in a virtual environment. 
 
 ### Install the SAS provider
-If you want to build the package from these sources, run `python -m build` from the root of the repository which will create a wheel file in the dist subdirectory.
+If you want to build the package from these sources, install the build module using `pip install build` and then run `python -m build` from the root of the repository which will create a wheel file in the dist subdirectory. 
 
 #### Installing in a local virtual environment
 The SAS provider is available as a package published in PyPI. To install it, switch to the Python environment where Airflow is installed, and run the following command:
@@ -36,7 +36,7 @@ There are a few ways to provide the package:
 In order to connect to SAS Viya from the Airflow operator, you will need to create a connection. The easiest way to do this is to go into the Airflow UI under Admin/Connections and create a new connection using the blue + button. Select SAS from the list of connection types, and enter sas_default as the name. The applicable fields are host (http or https url to your SAS Viya install), login and password. It is also possible to specify an OAuth token by creating a json body in the extra field. For example `{"token": "oauth_token_here"}`. If a token is found it is used instead of the user/password.
 
 ### Running a DAG with a SAS provider
-See example files in the src/example_dags directory. These dags can be modified and 
+See example files in the src/sas_airflow_provider/example_dags directory. These dags can be modified and 
 placed in your Airflow dags directory. 
 
 Mac note: If you are running Airflow standalone on a Mac, there is a known issue regarding how process forking works.
