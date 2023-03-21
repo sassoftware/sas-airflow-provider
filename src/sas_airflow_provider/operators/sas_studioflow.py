@@ -119,13 +119,22 @@ class SASStudioFlowOperator(BaseOperator):
         if self.flow_exec_log is True:
             _dump_logs(session, job)
 
-        # raise exception in Airflow if SAS Studio Flow ended execution with "failed" state
+        # raise exception in Airflow if SAS Studio Flow ended execution with "failed" "canceled" or "timed out" state
         if job_state == "failed":
             raise AirflowFailException(
                 "SAS Studio Flow Execution completed with an error. See log for details "
                 "(set flow_exec_log to True in the operator to turn on logging)"
             )
-
+        if job_state == "canceled":
+            raise AirflowFailException(
+                "SAS Studio Flow Execution was canceled or aborted. See log for details "
+                "(set flow_exec_log to True in the operator to turn on logging)"
+            )
+        if job_state == "timed out":
+            raise AirflowFailException(
+                "SAS Studio Flow Execution has timed out. See log for details "
+                "(set flow_exec_log to True in the operator to turn on logging)"
+            )
         return 1
 
 
