@@ -71,7 +71,7 @@ class SASJobExecutionOperator(BaseOperator):
         headers = {"Accept": "application/vnd.sas.job.execution.job+json"}
         response = session.post(url, headers=headers, data=payload, verify=False)
 
-        if(response.status_code < 200 or response.status_code > 300):
+        if(response.status_code < 200 or response.status_code >= 300):
             raise AirflowFailException(f"SAS Job Execution HTTP status code {response.status_code}")
 
         return 1
