@@ -24,6 +24,7 @@ import time
 import requests
 
 from airflow.exceptions import AirflowFailException
+from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 
@@ -78,63 +79,67 @@ class SASStudioFlowOperator(BaseOperator):
         self.env_vars = env_vars
 
     def execute(self, context):
+        try:
+            self.log.info("Authenticate connection")
+            h = SasHook(self.connection_name)
+            session = h.get_conn()
 
-        self.log.info("Authenticate connection")
-        h = SasHook(self.connection_name)
-        session = h.get_conn()
+            self.log.info("Generate code for Studio Flow: %s", str(self.flow_path))
+            code = _generate_flow_code(
+                session,
+                self.flow_path_type,
+                self.flow_path,
+                self.flow_codegen_initCode,
+                self.flow_codegen_wrapCode,
+                None,
+                self.compute_context,
+            )
 
-        self.log.info("Generate code for Studio Flow: %s", str(self.flow_path))
-        code = _generate_flow_code(
-            session,
-            self.flow_path_type,
-            self.flow_path,
-            self.flow_codegen_initCode,
-            self.flow_codegen_wrapCode,
-            None,
-            self.compute_context,
-        )
+            if self.env_vars:
+                # Add environment variables to pre-code
+                self.log.info(f"Adding {len(self.env_vars)} environment variables to code")
+                pre_env_code = "/** Setting up environment variables **/\n"
+                for env_var in self.env_vars:
+                    env_val = self.env_vars[env_var]
+                    pre_env_code = pre_env_code + f"options set={env_var}='{env_val}';\n"
+                pre_env_code = pre_env_code + "/** Finished setting up environment variables **/\n\n"
+                code["code"] = pre_env_code + code["code"]
 
-        if self.env_vars:
-            # Add environment variables to pre-code
-            self.log.info(f"Adding {len(self.env_vars)} environment variables to code")
-            pre_env_code = "/** Setting up environment variables **/\n"
-            for env_var in self.env_vars:
-                env_val = self.env_vars[env_var]
-                pre_env_code = pre_env_code + f"options set={env_var}='{env_val}';\n"
-            pre_env_code = pre_env_code + "/** Finished setting up environment variables **/\n\n"
-            code["code"] = pre_env_code + code["code"]
+            # Create the job request for JES
+            jr = {
+                "name": f"Airflow_{self.task_id}",
+                "jobDefinition": {"type": "Compute", "code": code["code"]},
+                "arguments": {"_contextName": self.compute_context},
+            }
 
-        # Create the job request for JES
-        jr = {
-            "name": f"Airflow_{self.task_id}",
-            "jobDefinition": {"type": "Compute", "code": code["code"]},
-            "arguments": {"_contextName": self.compute_context},
-        }
+            # Kick off the JES job
+            job = _run_job_and_wait(session, jr, 1)
+            job_state = job["state"]
 
-        # Kick off the JES job
-        job = _run_job_and_wait(session, jr, 1)
-        job_state = job["state"]
+        # support retry if API-calls fails for whatever reason  
+        except Exception as e:
+            raise AirflowException(f"SASStudioFlowOperator error: {str(e)}")
 
         # display logs if needed
         if self.flow_exec_log is True:
-            _dump_logs(session, job)
+            # Safeguard if we are unable to retreive the log. We will NOT throw any exceptions
+            try:
+                _dump_logs(session, job)
+            except Exception as e:
+                self.log.info("Unable to retrieve log. Maybe the log is too large.")
 
         # raise exception in Airflow if SAS Studio Flow ended execution with "failed" "canceled" or "timed out" state
+        # support retry for 'failed' (typically there is an ERROR in the log) and 'timed out'
+        # do NOT support retry for 'canceled' (typically the SAS Job called ABORT ABEND)
         if job_state == "failed":
-            raise AirflowFailException(
-                "SAS Studio Flow Execution completed with an error. See log for details "
-                "(set flow_exec_log to True in the operator to turn on logging)"
-            )
+            raise AirflowException("SAS Studio Flow Execution completed with an error.")
+           
         if job_state == "canceled":
-            raise AirflowFailException(
-                "SAS Studio Flow Execution was canceled or aborted. See log for details "
-                "(set flow_exec_log to True in the operator to turn on logging)"
-            )
+            raise AirflowFailException("SAS Studio Flow Execution was cancelled or aborted. See log for details ")
+           
         if job_state == "timed out":
-            raise AirflowFailException(
-                "SAS Studio Flow Execution has timed out. See log for details "
-                "(set flow_exec_log to True in the operator to turn on logging)"
-            )
+            raise AirflowException("SAS Studio Flow Execution has timed out. See log for details ")
+
         return 1
 
 
