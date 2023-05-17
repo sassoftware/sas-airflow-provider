@@ -53,6 +53,8 @@ class SASStudioFlowOperator(BaseOperator):
     ui_color = "#CCE5FF"
     ui_fgcolor = "black"
 
+    template_fields: Sequence[str] = ("env_vars",)
+
     def __init__(
         self,
         flow_path_type: str,
@@ -116,7 +118,7 @@ class SASStudioFlowOperator(BaseOperator):
             job = _run_job_and_wait(session, jr, 1)
             job_state = job["state"]
 
-        # support retry if API-calls fails for whatever reason  
+        # support retry if API-calls fails for whatever reason
         except Exception as e:
             raise AirflowException(f"SASStudioFlowOperator error: {str(e)}")
 
@@ -133,10 +135,10 @@ class SASStudioFlowOperator(BaseOperator):
         # do NOT support retry for 'canceled' (typically the SAS Job called ABORT ABEND)
         if job_state == "failed":
             raise AirflowException("SAS Studio Flow Execution completed with an error.")
-           
+
         if job_state == "canceled":
             raise AirflowFailException("SAS Studio Flow Execution was cancelled or aborted. See log for details ")
-           
+
         if job_state == "timed out":
             raise AirflowException("SAS Studio Flow Execution has timed out. See log for details ")
 
