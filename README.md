@@ -40,8 +40,10 @@ See example files in the src/sas_airflow_provider/example_dags directory. These 
 placed in your Airflow dags directory. 
 
 Mac note: If you are running Airflow standalone on a Mac, there is a known issue regarding how process forking works.
-This causes issues with the urllib which is used by the operator. To get around it set NO_PROXY=URL in your environment
+This causes issues with the urllib which is used by the operator. To get around it set NO_PROXY=* in your environment
 prior to running Airflow in standalone mode.
+Eg:
+`export NO_PROXY="*"`
 
 ### Prerequisites for running demo DAGs
 You will need to create a SAS Studio Flow or a Job Definition before you can reference it from a DAG. The easiest way is to use the SAS Studio UI to do this.
