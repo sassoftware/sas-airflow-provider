@@ -42,6 +42,8 @@ class SASJobExecutionOperator(BaseOperator):
         SAS Job as SAS Macro variables
     """
 
+    template_fields: Sequence[str] = ("parameters",)
+
     def __init__(self, job_name: str, parameters: dict, connection_name: str = None,  **kwargs) -> None:
         super().__init__(**kwargs)
         self.connection_name = connection_name
