@@ -27,6 +27,7 @@ from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
+from sas_airflow_provider.util.util import dump_logs
 
 class SASStudioFlowOperator(BaseOperator):
     """
@@ -126,7 +127,7 @@ class SASStudioFlowOperator(BaseOperator):
         if self.flow_exec_log is True:
             # Safeguard if we are unable to retreive the log. We will NOT throw any exceptions
             try:
-                _dump_logs(session, job)
+                dump_logs(session, job)
             except Exception as e:
                 self.log.info("Unable to retrieve log. Maybe the log is too large.")
 
@@ -240,18 +241,7 @@ def _create_or_connect_to_session(session: requests.Session, context_name: str, 
     return response.json()
 
 
-def _get_file_contents(session, file_uri) -> str:
-    r = session.get(f"{file_uri}/content")
-    if r.status_code != 200:
-        raise RuntimeError(f"Failed to get file contents for {file_uri}: {r.text}")
-    return r.text
 
-
-def _get_uri(links, rel):
-    link = next((x for x in links if x["rel"] == rel), None)
-    if link is None:
-        return None
-    return link["uri"]
 
 
 JES_URI = "/jobExecution"
@@ -281,14 +271,3 @@ def _run_job_and_wait(session, job_request: dict, poll_interval: int) -> dict:
     return job
 
 
-def _dump_logs(session, job):
-    # Get the log from the job
-    log_uri = _get_uri(job["links"], "log")
-    if not log_uri:
-        print("Warning: failed to retrieve log uri from links. Log will not be displayed")
-    else:
-        log_contents = _get_file_contents(session, log_uri)
-        # Parse the json log format and print each line
-        jcontents = json.loads(log_contents)
-        for line in jcontents["items"]:
-            print(f'{line["type"]}: {line["line"]}\n')

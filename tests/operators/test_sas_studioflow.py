@@ -22,10 +22,11 @@ from unittest.mock import ANY, Mock, patch
 from sas_airflow_provider.operators.sas_studioflow import (
     SASStudioFlowOperator,
     _create_or_connect_to_session,
-    _dump_logs,
     _generate_flow_code,
     _run_job_and_wait,
 )
+
+from sas_airflow_provider.util.util import dump_logs
 
 
 class TestSasStudioFlowOperator:
@@ -33,7 +34,7 @@ class TestSasStudioFlowOperator:
     Test class for SASStudioFlow
     """
 
-    @patch("sas_airflow_provider.operators.sas_studioflow._dump_logs")
+    @patch("sas_airflow_provider.operators.sas_studioflow.dump_logs")
     @patch("sas_airflow_provider.operators.sas_studioflow._run_job_and_wait")
     @patch("sas_airflow_provider.operators.sas_studioflow._generate_flow_code")
     @patch("sas_airflow_provider.operators.sas_studioflow.SasHook")
@@ -62,6 +63,7 @@ class TestSasStudioFlowOperator:
 
         operator.execute(context={})
 
+        dumplogs_mock.assert_called()
         session_mock.assert_called_with("SAS")
         flow_mock.assert_called_with(
             ANY, "content", "/Public/Airflow/demo_studio_flow_1.flw", False, False, None, ANY
@@ -158,5 +160,5 @@ class TestSasStudioFlowOperator:
             {"items": [{"type":"INFO", "line":"line value"}]}
             """
         req = {"links": [{"rel": "log", "uri": "log/uri"}]}
-        _dump_logs(session_mock, req)
+        dump_logs(session_mock, req)
         session_mock.get.assert_called_with("log/uri/content")
