@@ -21,9 +21,7 @@ from unittest.mock import ANY, Mock, patch
 
 from sas_airflow_provider.operators.sas_studioflow import (
     SASStudioFlowOperator,
-    _create_or_connect_to_session,
-    _generate_flow_code,
-    _run_job_and_wait,
+    create_or_connect_to_session,
 )
 
 from sas_airflow_provider.util.util import dump_logs
@@ -34,20 +32,19 @@ class TestSasStudioFlowOperator:
     Test class for SASStudioFlow
     """
 
+
+    @patch.object(SASStudioFlowOperator, '_run_job_and_wait')
+    @patch.object(SASStudioFlowOperator, '_generate_flow_code')
     @patch("sas_airflow_provider.operators.sas_studioflow.dump_logs")
-    @patch("sas_airflow_provider.operators.sas_studioflow._run_job_and_wait")
-    @patch("sas_airflow_provider.operators.sas_studioflow._generate_flow_code")
     @patch("sas_airflow_provider.operators.sas_studioflow.SasHook")
     def test_execute_sas_studio_flow_operator_basic(
-        self, session_mock, flow_mock, runjob_mock, dumplogs_mock
+        self, session_mock, dumplogs_mock, mock_gen_flow_code, mock_run_job_and_wait
     ):
-        flow_mock.return_value = {"code": "test code"}
-        runjob_mock.return_value = {
-            "id": "jobid1",
-            "state": "completed",
-            "links": [{"rel": "log", "uri": "log/uri"}],
-        }
-
+        mock_gen_flow_code.return_value = {"code": "test code"}
+        mock_run_job_and_wait.return_value = { "id": "jobid1",
+                                               "state": "completed",
+                                               "links": [{"rel": "log", "uri": "log/uri"}],
+                                               }, True
         environment_vars = {"env1": "val1", "env2": "val2"}
         operator = SASStudioFlowOperator(
             task_id="demo_studio_flow_1.flw",
@@ -65,9 +62,8 @@ class TestSasStudioFlowOperator:
 
         dumplogs_mock.assert_called()
         session_mock.assert_called_with("SAS")
-        flow_mock.assert_called_with(
-            ANY, "content", "/Public/Airflow/demo_studio_flow_1.flw", False, False, None, ANY
-        )
+        mock_gen_flow_code.assert_called()
+        mock_run_job_and_wait.assert_called()
 
     def test_execute_sas_studio_flow_create_or_connect(self):
         session = Mock()
@@ -75,7 +71,7 @@ class TestSasStudioFlowOperator:
         session.get.return_value = req_ret
         req_ret.json.return_value = {"count": 1, "items": ["dummy"]}
         req_ret.status_code = 200
-        r = _create_or_connect_to_session(session, "context", "name")
+        r = create_or_connect_to_session(session, "context", "name")
         assert r == "dummy"
 
     def test_execute_sas_studio_flow_create_or_connect_new(self):
@@ -92,7 +88,7 @@ class TestSasStudioFlowOperator:
         req_ret1.status_code = 200
         req_ret2.json.return_value = {"count": 1, "items": [{"id": "10"}]}
         req_ret2.status_code = 200
-        r = _create_or_connect_to_session(session, "context", "name")
+        r = create_or_connect_to_session(session, "context", "name")
         assert r == {"a": "b"}
 
     def test_execute_sas_studio_flow_operator_gen_code(self):
@@ -101,8 +97,14 @@ class TestSasStudioFlowOperator:
         session.post.return_value = req_ret
         req_ret.json.return_value = {"code": "code val"}
         req_ret.status_code = 200
+        op = SASStudioFlowOperator(task_id="demo_studio_flow_1.flw",
+                                   flow_path_type="content",
+                                   flow_path="/path",
+                                   flow_exec_log=True,
+                                   flow_codegen_init_code=True, flow_codegen_wrap_code=True)
+        op.connection = session
+        r = op._generate_flow_code()
 
-        r = _generate_flow_code(session, "content", "/path", True, True, None)
         session.post.assert_called_with(
             "/studioDevelopment/code",
             json={
@@ -117,7 +119,7 @@ class TestSasStudioFlowOperator:
         )
         assert r == {"code": "code val"}
 
-    @patch("sas_airflow_provider.operators.sas_studioflow._create_or_connect_to_session")
+    @patch("sas_airflow_provider.operators.sas_studioflow.create_or_connect_to_session")
     def test_execute_sas_studio_flow_operator_gen_code_compute(self, c_mock):
         session = Mock()
         req_ret = Mock()
@@ -126,7 +128,14 @@ class TestSasStudioFlowOperator:
         req_ret.status_code = 200
         c_mock.return_value = {"id": "abc"}
 
-        r = _generate_flow_code(session, "compute", "/path", True, True, None)
+        op = SASStudioFlowOperator(task_id="demo_studio_flow_1.flw",
+                                   flow_path_type="compute",
+                                   flow_path="/path",
+                                   flow_exec_log=True,
+                                   flow_codegen_init_code=True, flow_codegen_wrap_code=True)
+        op.connection = session
+        r = op._generate_flow_code()
+
 
         c_mock.assert_called_with(ANY, "SAS Studio compute context", "Airflow-Session")
 
@@ -149,9 +158,15 @@ class TestSasStudioFlowOperator:
         session_mock.post.return_value.status_code = 201
         session_mock.post.return_value.json.return_value = {"id": "1", "state": "completed"}
         req = {"a": "b"}
-        r = _run_job_and_wait(session_mock, req, 1)
+        op = SASStudioFlowOperator(task_id="demo_studio_flow_1.flw",
+                                   flow_path_type="compute",
+                                   flow_path="/path",
+                                   flow_exec_log=True,
+                                   flow_codegen_init_code=True, flow_codegen_wrap_code=True)
+        op.connection = session_mock
+        r = op._run_job_and_wait(req, 1)
         session_mock.post.assert_called_with("/jobExecution/jobs", json={"a": "b"})
-        assert r == {"id": "1", "state": "completed"}
+        assert r == ({"id": "1", "state": "completed"}, True)
 
     def test_execute_sas_studio_flow_get_logs(self):
         session_mock = Mock()

@@ -25,17 +25,12 @@ from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import dump_logs
 
-JES_URI = "/jobExecution"
-JOB_URI = f"{JES_URI}/jobs"
-
-
 class SASJobExecutionOperator(BaseOperator):
     """
-    Executes a SAS Job
-
-    .. seealso::
-        For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:SASJobExecutionOperator`
+    Executes a SAS Job using /SASJobExecution endpoint. Job execution is documented here:
+    https://go.documentation.sas.com/doc/en/pgmsascdc/default/jobexecug/p1ct9uzl5c7omun1t2zy0gxhlqlc.htm
+    The specific endpoint /SASJobExecution is documented here:
+    https://go.documentation.sas.com/doc/en/pgmsascdc/default/jobexecug/n06tcybrt9wdeun1ko9bkjn0ko0b.htm
 
     :param connection_name: Name of the SAS Viya connection stored as an Airflow HTTP connection
     :param job_name: Name of the SAS Job to be run
@@ -69,8 +64,6 @@ class SASJobExecutionOperator(BaseOperator):
         for key, value in self.parameters.items():
             url_string += f"&{key}={urllib.parse.quote(value)}"
 
-        # this endpoint is documented here:
-        # https://go.documentation.sas.com/doc/en/pgmsascdc/9.4_3.5/jobexecug/p1ct9uzl5c7omun1t2zy0gxhlqlc.htm
         url = f"/SASJobExecution/?_program={program_name}{url_string}"
 
         headers = {"Accept": "application/vnd.sas.job.execution.job+json"}

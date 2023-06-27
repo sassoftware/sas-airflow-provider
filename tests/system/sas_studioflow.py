@@ -18,7 +18,6 @@
 from datetime import datetime
 from airflow import DAG
 from sas_airflow_provider.operators.sas_studioflow import SASStudioFlowOperator
-
 dag = DAG('demo_studio_flow_1', description='Executing Studio Flow for demo purposes',
           schedule="@once",
           start_date=datetime(2022, 6, 1), catchup=False)
