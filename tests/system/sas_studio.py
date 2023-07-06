@@ -17,10 +17,9 @@
 
 from datetime import datetime
 from airflow import DAG
-from sas_airflow_provider.operators.sas_studioflow import SASStudioFlowOperator
-
+from sas_airflow_provider.operators.sas_studio import SASStudioOperator
 dag = DAG('demo_studio_flow_1', description='Executing Studio Flow for demo purposes',
-          schedule_interval='0 12 * * *',
+          schedule="@once",
           start_date=datetime(2022, 6, 1), catchup=False)
 
 environment_vars = {
@@ -28,13 +27,14 @@ environment_vars = {
     "env2": "val2"
 }
 
-task1 = SASStudioFlowOperator(task_id='demo_studio_flow_1.flw',
-                              flow_path_type='content',
-                              flow_path='/Public/Airflow/demo_studio_flow_1.flw',
-                              flow_exec_log=True,
+task1 = SASStudioOperator(task_id='demo_studio_flow_1.flw',
+                              path_type='content',
+                              path='/Public/Airflow/demo_studio_flow_1.flw',
+                              exec_log=True,
                               compute_context="SAS Studio compute context",
-                              flow_codegen_init_code=False,
-                              flow_codegen_wrap_code=False,
-                              connection_name='sas_default',
+                              codegen_init_code=False,
+                              codegen_wrap_code=False,
                               env_vars=environment_vars,
                               dag=dag)
+if __name__ == '__main__':
+    dag.test()

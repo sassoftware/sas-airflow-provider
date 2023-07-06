@@ -27,7 +27,7 @@ from sas_airflow_provider.util.util import \
 class SASComputeCreateSession(BaseOperator):
     """
     Create a Compute session and push the session id as an XCom named 'compute_session_id'.
-    This can be used as an input for the SASStudioFlowOperator to give finer grained control over sessions
+    This can be used as an input for the SASStudioOperator to give finer grained control over sessions
 
     :param connection_name: (optional) name of the connection to use. The connection should be defined
         as an HTTP connection in Airflow. If not specified then the default is used
