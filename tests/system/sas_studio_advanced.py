@@ -34,7 +34,7 @@ task0 = SASComputeCreateSession(task_id="create_sess", dag=dag)
 task1 = SASStudioOperator(task_id='demo_program',
                           path_type='compute',
                           exec_type='program',
-                          path='/bigdisk/lnx/anshak/test.sas',
+                          path='/path/to/test.sas',
                           exec_log=True,
                           compute_session_id="{{ ti.xcom_pull(key='compute_session_id', task_ids=['create_sess'])|first }}",
                           compute_context="SAS Studio compute context",
