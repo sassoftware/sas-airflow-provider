@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 import json
 import time
+import warnings
 
 import requests
 
@@ -29,13 +30,11 @@ from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import dump_logs
 
+
 class SASStudioFlowOperator(BaseOperator):
     """
-    Executes a SAS Studio flow
-
-    .. seealso::
-        For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:SASStudioFlowOperator`
+    Executes a SAS Studio flow.
+    Note that this operator is deprecated. Please use SASStudioOperator instead
 
     :param flow_path_type: valid values are content or compute
     :param flow_path: path to the flow to execute. eg /Public/myflow.flw
@@ -57,19 +56,20 @@ class SASStudioFlowOperator(BaseOperator):
     template_fields: Sequence[str] = ("env_vars",)
 
     def __init__(
-        self,
-        flow_path_type: str,
-        flow_path: str,
-        flow_exec_log: bool,
-        flow_codegen_init_code=False,
-        flow_codegen_wrap_code=False,
-        connection_name=None,
-        compute_context="SAS Studio compute context",
-        env_vars=None,
-        **kwargs,
+            self,
+            flow_path_type: str,
+            flow_path: str,
+            flow_exec_log: bool,
+            flow_codegen_init_code=False,
+            flow_codegen_wrap_code=False,
+            connection_name=None,
+            compute_context="SAS Studio compute context",
+            env_vars=None,
+            **kwargs,
     ) -> None:
 
         super().__init__(**kwargs)
+        warnings.warn("SASStudioFlowOperator is deprecated. Please use SASStudioOperator instead.")
         if env_vars is None:
             env_vars = {}
         self.flow_path_type = flow_path_type
@@ -147,13 +147,13 @@ class SASStudioFlowOperator(BaseOperator):
 
 
 def _generate_flow_code(
-    session,
-    artifact_type: str,
-    path: str,
-    init_code: bool,
-    wrap_code: bool,
-    session_id=None,
-    compute_context="SAS Studio compute context",
+        session,
+        artifact_type: str,
+        path: str,
+        init_code: bool,
+        wrap_code: bool,
+        session_id=None,
+        compute_context="SAS Studio compute context",
 ):
     # main API URI for Code Gen
     uri_base = "/studioDevelopment/code"
@@ -241,9 +241,6 @@ def _create_or_connect_to_session(session: requests.Session, context_name: str, 
     return response.json()
 
 
-
-
-
 JES_URI = "/jobExecution"
 JOB_URI = f"{JES_URI}/jobs"
 
@@ -269,5 +266,3 @@ def _run_job_and_wait(session, job_request: dict, poll_interval: int) -> dict:
         state = job["state"]
     print("Job request has completed execution with the status: " + str(state))
     return job
-
-
