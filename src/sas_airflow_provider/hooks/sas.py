@@ -40,10 +40,12 @@ class SasHook(BaseHook):
         self.token = extras.get("token")
         self.client_id = extras.get("client_id")
         self.client_secret = ""
+        self.grant_type = "password"
         if not self.client_id:
             self.client_id = "sas.cli"
         else:
-            self.client_secret = extras.get("client_secret")  # type: ignore
+            self.client_secret = extras.get("client_secret") 
+            self.grant_type = "client_credentials"
 
         if not self.sas_conn:
             self.sas_conn = self._create_session_for_connection()
@@ -65,7 +67,7 @@ class SasHook(BaseHook):
             auth_header = base64.b64encode(auth_bytes).decode("ascii")
             my_headers = {"Authorization": f"Basic {auth_header}"}
 
-            payload = {"grant_type": "password", "username": self.login, "password": self.password}
+            payload = {"grant_type": self.grant_type, "username": self.login, "password": self.password}
 
             self.log.info("Get oauth token (see README if this crashes)")
             response = requests.post(
