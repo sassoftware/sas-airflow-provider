@@ -35,6 +35,7 @@ task1 = SASStudioOperator(task_id='demo_studio_flow_1.flw',
                               codegen_init_code=False,
                               codegen_wrap_code=False,
                               env_vars=environment_vars,
+                              macro_vars={"a":"b"},
                               dag=dag)
 if __name__ == '__main__':
     dag.test()
