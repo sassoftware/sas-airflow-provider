@@ -189,13 +189,13 @@ class SASStudioOperator(BaseOperator):
         pre_code = ""
         if self.env_vars:
             self.log.info(f"Adding {len(self.env_vars)} environment variables to code")
-            pre_code = "/** Begin environment variables **/\n"
+            pre_code += "/** Begin environment variables **/\n"
             for k, v in self.env_vars.items():
                 pre_code += f"OPTIONS SET={k}='{v}';\n"
             pre_code += "/** End environment variables **/\n\n"
         if self.macro_vars:
             self.log.info(f"Adding {len(self.macro_vars)} macro variables to code")
-            pre_code = "/** Begin macro variables **/\n"
+            pre_code += "/** Begin macro variables **/\n"
             for k, v in self.macro_vars.items():
                 pre_code += f"%LET {k} = {v};\n"
             pre_code += "/** End macro variables **/\n\n"
