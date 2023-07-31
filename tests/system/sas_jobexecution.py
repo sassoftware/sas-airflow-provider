@@ -33,6 +33,7 @@ hello_task = SASJobExecutionOperator(task_id='hello_task',
                                      job_name='/Public/Airflow/Hello-World',
                                      parameters=job_parameters,
                                      job_exec_log=True,
+                                     add_airflow_vars=True,
                                      dag=dag)
 
 if __name__ == '__main__':
