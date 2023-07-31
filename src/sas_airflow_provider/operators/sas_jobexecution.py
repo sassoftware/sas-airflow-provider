@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import os
 import urllib.parse
 
 from airflow.exceptions import AirflowFailException
@@ -36,7 +37,9 @@ class SASJobExecutionOperator(BaseOperator):
     :param job_name: Name of the SAS Job to be run
     :param parameters Dictionary of all the parameters that should be passed to the
         SAS Job as SAS Macro variables
-    :param job_exec_log: boolean. whether or not to dump out the log
+    :param job_exec_log: boolean. whether or not to dump out the log (default is false)
+    :param add_airflow_vars: boolean. whether or not to add airflow environment variables as macro variables
+       (default is false)
     """
 
     template_fields: Sequence[str] = ("parameters",)
@@ -46,16 +49,33 @@ class SASJobExecutionOperator(BaseOperator):
                  parameters: dict,
                  connection_name: str = None,
                  job_exec_log: bool = False,
+                 add_airflow_vars: bool = False,
                  **kwargs) -> None:
         super().__init__(**kwargs)
         self.connection_name = connection_name
         self.job_name = job_name
         self.parameters = parameters
         self.job_exec_log = job_exec_log
+        self.add_airflow_vars = add_airflow_vars
+
+    def _add_airflow_env_vars(self):
+        for x in ['AIRFLOW_CTX_DAG_OWNER',
+                  'AIRFLOW_CTX_DAG_ID',
+                  'AIRFLOW_CTX_TASK_ID',
+                  'AIRFLOW_CTX_EXECUTION_DATE',
+                  'AIRFLOW_CTX_TRY_NUMBER',
+                  'AIRFLOW_CTX_DAG_RUN_ID', ]:
+            v = os.getenv(x)
+            if v:
+                self.parameters[x] = v
 
     def execute(self, context):
         h = SasHook(self.connection_name)
         session = h.get_conn()
+
+        if self.add_airflow_vars:
+            print(f"Add Airflow variables as parameters")
+            self._add_airflow_env_vars()
 
         print(f"Executing SAS job: {self.job_name}")
         # url escape the program name
