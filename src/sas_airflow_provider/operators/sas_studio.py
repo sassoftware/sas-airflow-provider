@@ -142,6 +142,10 @@ class SASStudioOperator(BaseOperator):
                 jr['arguments'] = {"_sessionId": self.compute_session_id}
             else:
                 jr['arguments'] = {"_contextName": self.compute_context_name}
+                # the jobExecution service will destroy the compute session if it was not passed in.
+                if self.output_macro_var_prefix:
+                    self.log.info("Output macro variables will not be available. To make them available please "
+                                  "specify a compute session")
 
             # Kick off the JES job
             job, success = self._run_job_and_wait(jr, 1)
@@ -152,7 +156,7 @@ class SASStudioOperator(BaseOperator):
                 dump_logs(self.connection, job)
 
             # set output variables
-            if success and self.output_macro_var_prefix:
+            if success and self.output_macro_var_prefix and self.compute_session_id:
                 self._set_output_variables(context)
 
         # support retry if API-calls fails for whatever reason
