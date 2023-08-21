@@ -100,4 +100,7 @@ class SasHook(BaseHook):
         session.put = lambda *args, **kwargs: requests.Session.put(  # type: ignore
             session, urllib.parse.urljoin(root_url, args[0]), *args[1:], **kwargs
         )
+        session.delete = lambda *args, **kwargs: requests.Session.delete(  # type: ignore
+            session, urllib.parse.urljoin(root_url, args[0]), *args[1:], **kwargs
+        )
         return session
