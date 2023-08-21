@@ -129,6 +129,16 @@ def dump_logs(session, job):
             if t != "title":
                 print(f'{line["line"]}')
 
+def find_named_compute_session(session: requests.Session, name: str) -> dict:
+    # find session with given name
+    response = session.get(f"/compute/sessions?filter=eq(name, {name})")
+    if not response.ok:
+        raise RuntimeError(f"Find sessions failed: {response.status_code}")
+    sessions = response.json()
+    if sessions["count"] > 0:
+        print(f"Existing session named '{name}' was found")
+        return sessions["items"][0]
+    return {}
 
 def create_or_connect_to_session(session: requests.Session, context_name: str, name: str) -> dict:
     """
@@ -139,14 +149,9 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     :param name: name of session to find
     :return: session object
     """
-    # find session with given name
-    response = session.get(f"/compute/sessions?filter=eq(name, {name})")
-    if not response.ok:
-        raise RuntimeError(f"Find sessions failed: {response.status_code}")
-    sessions = response.json()
-    if sessions["count"] > 0:
-        print(f"Existing session named '{name}' was found")
-        return sessions["items"][0]
+    compute_session = find_named_compute_session(session, name)
+    if compute_session:
+        return compute_session
 
     print(f"Compute session named '{name}' does not exist, a new one will be created")
     # find compute context
@@ -171,3 +176,10 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
         raise RuntimeError(f"Failed to create session: {response.text}")
 
     return response.json()
+
+def end_compute_session(session: requests.Session, id):
+    uri = f'/compute/sessions/{id}'
+    response = session.delete(uri)
+    if not response.ok:
+        return False
+    return True
