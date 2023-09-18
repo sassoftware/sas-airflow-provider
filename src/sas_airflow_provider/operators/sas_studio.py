@@ -148,7 +148,7 @@ class SASStudioOperator(BaseOperator):
                                   "specify a compute session")
 
             # Kick off the JES job
-            job, success = self._run_job_and_wait(jr, 1)
+            job, success = self._run_job_and_wait(jr, 10)
             job_state = job["state"]
 
             # display logs if needed
@@ -253,16 +253,27 @@ class SASStudioOperator(BaseOperator):
 
         job = response.json()
         job_id = job["id"]
-        state = job["state"]
         self.log.info(f"Submitted job request with id {job_id}. Waiting for completion")
         uri = f"{JOB_URI}/{job_id}"
-        while state in ["pending", "running"]:
+
+        # Poll for state of the job 
+        # If ANY error occours set state to 'unknown', print the reason to the log, and continue polling
+        state = "unknown"
+        while state in ["pending", "running", "unknown"]:
             time.sleep(poll_interval)
-            response = self.connection.get(uri)
-            if not response.ok:
-                raise RuntimeError(f"Failed to get job: {response.text}")
-            job = response.json()
-            state = job["state"]
+
+            try:
+                response = self.connection.get(uri)
+                if not response.ok:
+                    self.log.info(f'Invalid response code {response.status_code} from {uri}. Will set state=unknown and continue checking...')
+                    state = "unknown"
+                else:
+                    job = response.json()
+                    state = job["state"]
+            except Exception as e:
+                self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
+                state = "unknown"
+            
         self.log.info("Job request has completed execution with the status: " + str(state))
         success = True
         if state in ['failed', 'canceled', 'timed out']:
