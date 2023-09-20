@@ -42,5 +42,5 @@ class TestSasHook:
 
         req_mock.assert_called_with('host/SASLogon/oauth/token',
                                     data={'grant_type': 'password', 'username': 'user',
-                                          'password': 'pass'}, verify=False,
+                                          'password': 'pass'}, verify=True,
                                     headers={'Authorization': 'Basic c2FzLmNsaTo='})
