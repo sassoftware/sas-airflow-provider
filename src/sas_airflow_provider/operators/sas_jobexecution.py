@@ -87,7 +87,7 @@ class SASJobExecutionOperator(BaseOperator):
         url = f"/SASJobExecution/?_program={program_name}{url_string}"
 
         headers = {"Accept": "application/vnd.sas.job.execution.job+json"}
-        response = session.post(url, headers=headers, verify=False)
+        response = session.post(url, headers=headers)
 
         if response.status_code < 200 or response.status_code >= 300:
             raise AirflowFailException(f"SAS Job Execution HTTP status code {response.status_code}")
@@ -101,7 +101,7 @@ class SASJobExecutionOperator(BaseOperator):
             job_id = response.headers.get('X-Sas-Jobexec-Id')
             if job_id:
                 job_status_url = f"/jobExecution/jobs/{job_id}"
-                job = session.get(job_status_url, verify=False)
+                job = session.get(job_status_url)
                 if job.status_code >= 200:
                     dump_logs(session, job.json())
                 else:

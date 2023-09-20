@@ -51,5 +51,4 @@ class TestSasJobExecutionOperator:
         dump_logs_mock.assert_called()
         session_mock.return_value.get_conn.return_value.post.assert_called_with('/SASJobExecution/?_program=/Public/my_job&a=b',
                                                           headers={
-                                                              'Accept': 'application/vnd.sas.job.execution.job+json'},
-                                                          verify=False)
+                                                              'Accept': 'application/vnd.sas.job.execution.job+json'})

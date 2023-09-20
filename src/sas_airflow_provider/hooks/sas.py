@@ -26,6 +26,8 @@ class SasHook(BaseHook):
         self.password = None
         self.token = None
         self.sas_conn = None
+        self.cert_verify = True
+        self.grant_type = None
 
     def get_conn(self):
         """Returns a SAS connection."""
@@ -39,11 +41,18 @@ class SasHook(BaseHook):
         extras = conn.extra_dejson
         self.token = extras.get("token")
         self.client_id = extras.get("client_id")
+        self.grant_type = extras.get("grant_type", "password")
         self.client_secret = ""
         if not self.client_id:
             self.client_id = "sas.cli"
         else:
             self.client_secret = extras.get("client_secret")  # type: ignore
+
+        self.cert_verify = extras.get("ssl_certificate_verification", True)
+        if not self.cert_verify:
+            self.log.info(f"TLS verification is turned off")
+        elif isinstance(self.cert_verify, str):
+            self.log.info("Using custom TLS CA certificate bundle file")
 
         if not self.sas_conn:
             self.sas_conn = self._create_session_for_connection()
@@ -55,8 +64,9 @@ class SasHook(BaseHook):
                       self.conn_id,
                       self.host)
 
-        # disable insecure HTTP requests warnings
-        urllib3.disable_warnings(InsecureRequestWarning)
+        if not self.cert_verify:
+            # disable insecure HTTP requests warnings
+            urllib3.disable_warnings(InsecureRequestWarning)
 
         if not self.token:
             # base 64 encode the api client auth and pass in authorization header
@@ -65,11 +75,14 @@ class SasHook(BaseHook):
             auth_header = base64.b64encode(auth_bytes).decode("ascii")
             my_headers = {"Authorization": f"Basic {auth_header}"}
 
-            payload = {"grant_type": "password", "username": self.login, "password": self.password}
+            payload = {"grant_type": self.grant_type}
+            if self.login:
+                payload["username"] = self.login
+                payload["password"] = self.password
 
             self.log.info("Get oauth token (see README if this crashes)")
             response = requests.post(
-                f"{self.host}/SASLogon/oauth/token", data=payload, verify=False, headers=my_headers
+                f"{self.host}/SASLogon/oauth/token", data=payload, verify=self.cert_verify, headers=my_headers
             )
 
             if response.status_code != 200:
@@ -85,8 +98,8 @@ class SasHook(BaseHook):
         session.headers.update({"Accept": "application/json"})
         session.headers.update({"Content-Type": "application/json"})
 
-        # set to false if using self signed certs
-        session.verify = False
+        # set to false if using self-signed certs
+        session.verify = self.cert_verify
 
         # prepend the root url for all operations on the session, so that consumers can just provide
         # resource uri without the protocol and host
