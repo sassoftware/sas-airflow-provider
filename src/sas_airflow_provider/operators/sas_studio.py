@@ -67,6 +67,10 @@ class SASStudioOperator(BaseOperator):
         tasks. The disadvantage is that it offers less flexibility in terms of having multiple sessions.
     :param output_macro_var_prefix: (optional) string. If this has a value, then any macro variables which start
         with this prefix will be retrieved from the session after the code has executed and will be returned as XComs
+    :param unknown_state_timeout: (optional) number of seconds to continue polling for the state of a running job if the state is 
+        temporary unobtainable. When unknown_state_timeout is reached without the state being retrievable, the operator 
+        will throw an AirflowFailException and the task will be marked as failed. 
+        Default value is 0, meaning the task will fail immediately if the state could not be retrieved. 
     """
 
     ui_color = "#CCE5FF"
@@ -88,6 +92,7 @@ class SASStudioOperator(BaseOperator):
             macro_vars=None,
             compute_session_id="",
             output_macro_var_prefix="",
+            unknown_state_timeout=0,
             **kwargs,
     ) -> None:
 
@@ -107,6 +112,7 @@ class SASStudioOperator(BaseOperator):
         self.connection = None
         self.compute_session_id = compute_session_id
         self.output_macro_var_prefix = output_macro_var_prefix.upper()
+        self.unknown_state_timeout=max(unknown_state_timeout,0)
 
     def execute(self, context):
         if self.path_type not in ['compute', 'content', 'raw']:
@@ -147,21 +153,26 @@ class SASStudioOperator(BaseOperator):
                     self.log.info("Output macro variables will not be available. To make them available please "
                                   "specify a compute session")
 
-            # Kick off the JES job
-            job, success = self._run_job_and_wait(jr, 10)
-            job_state = job["state"]
-
-            # display logs if needed
-            if self.exec_log is True:
-                dump_logs(self.connection, job)
-
-            # set output variables
-            if success and self.output_macro_var_prefix and self.compute_session_id:
-                self._set_output_variables(context)
-
-        # support retry if API-calls fails for whatever reason
+        # Support retry if API-calls fails for whatever reason as no harm is done
         except Exception as e:
             raise AirflowException(f"SASStudioOperator error: {str(e)}")
+
+        
+        # Kick off the JES job.
+        job, success = self._run_job_and_wait(jr, 10)
+        job_state = job["state"]
+
+        # display logs if needed
+        if self.exec_log is True:
+            # Safeguard if we are unable to retreive the log. We will NOT throw any exceptions
+            try:
+                dump_logs(self.connection, job)
+            except Exception as e:
+                self.log.info("Unable to retrieve log. Maybe the log is too large.")
+
+        # set output variables
+        if success and self.output_macro_var_prefix and self.compute_session_id:
+            self._set_output_variables(context)
 
         # raise exception in Airflow if SAS Studio Flow ended execution with "failed" "canceled" or "timed out" state
         # support retry for 'failed' (typically there is an ERROR in the log) and 'timed out'
@@ -245,35 +256,56 @@ class SASStudioOperator(BaseOperator):
 
     def _run_job_and_wait(self, job_request: dict, poll_interval: int) -> (dict, bool):
         uri = JOB_URI
-        response = self.connection.post(uri, json=job_request)
+
+        #Kick off job request. if failures, no harm is done.
+        try:
+            response = self.connection.post(uri, json=job_request)
+        except Exception as e:
+            raise AirflowException(f"Error when creating Job Request {e}") 
+
         # change to process non-standard codes returned from API (201, 400, 415)
         # i.e. situation when we were not able to make API call at all
         if response.status_code != 201:
-            raise RuntimeError(f"Failed to create job request: {response.text}")
-
+            raise AirflowException(f"Failed to create job request. Repsonse status code was: {response.status_code}")
+        
+        # Job started succesfully, start waiting for the job to finish
         job = response.json()
         job_id = job["id"]
         self.log.info(f"Submitted job request with id {job_id}. Waiting for completion")
         uri = f"{JOB_URI}/{job_id}"
 
         # Poll for state of the job 
-        # If ANY error occours set state to 'unknown', print the reason to the log, and continue polling
+        # If ANY error occours set state to 'unknown', print the reason to the log, and continue polling until self.unknown_state_timeout
         state = "unknown"
-        while state in ["pending", "running", "unknown"]:
+        countUnknownState = 0
+        log_location = None
+        while state in ["pending", "running"] or (state == "unknown" and ((countUnknownState*poll_interval) <= self.unknown_state_timeout)):
             time.sleep(poll_interval)
 
             try:
                 response = self.connection.get(uri)
                 if not response.ok:
+                    countUnknownState = countUnknownState + 1
                     self.log.info(f'Invalid response code {response.status_code} from {uri}. Will set state=unknown and continue checking...')
                     state = "unknown"
                 else:
+                    countUnknownState = 0
                     job = response.json()
                     state = job["state"]
+                    if state == "running" and log_location == None:
+                        # Print the log location to the DAG-log, in case the user needs access to the SAS-log while it is running.
+                        if "logLocation" in job:
+                            log_location=job["logLocation"];
+                            self.log.info(f"While the job is running the SAS-log formated at JSON can be found at URI: {log_location}?limit=9999999")
             except Exception as e:
+                countUnknownState = countUnknownState + 1
                 self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
                 state = "unknown"
-            
+                
+        if state == 'unknown':
+            # Raise AirflowFailException as we don't know if the job is still running
+            raise AirflowFailException(f'Unable to retrieve state of job after trying {countUnknownState} times. Will mark task as failed. Please check the SAS-log.')
+
         self.log.info("Job request has completed execution with the status: " + str(state))
         success = True
         if state in ['failed', 'canceled', 'timed out']:
