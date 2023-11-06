@@ -136,11 +136,11 @@ def find_named_compute_session(session: requests.Session, name: str) -> dict:
         raise RuntimeError(f"Find sessions failed: {response.status_code}")
     sessions = response.json()
     if sessions["count"] > 0:
-        print(f"Existing session named '{name}' was found")
+        print(f"Existing compute session named '{name}' with id {sessions['items'][0]['id']} was found")
         return sessions["items"][0]
     return {}
 
-def create_or_connect_to_session(session: requests.Session, context_name: str, name: str) -> dict:
+def create_or_connect_to_session(session: requests.Session, context_name: str, name = None) -> dict:
     """
     Connect to an existing compute session by name. If that named session does not exist,
     one is created using the context name supplied
@@ -148,12 +148,18 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     :param context_name: the context name to use to create the session if the session was not found
     :param name: name of session to find
     :return: session object
-    """
-    compute_session = find_named_compute_session(session, name)
-    if compute_session:
-        return compute_session
 
-    print(f"Compute session named '{name}' does not exist, a new one will be created")
+    """
+    if name != None:
+        compute_session = find_named_compute_session(session, name)
+        if compute_session:
+            return compute_session
+        
+        print(f"Compute session named '{name}' does not exist, a new one will be created")
+    else:
+        print(f"A new unnamed compute session will be created")
+
+
     # find compute context
     response = session.get("/compute/contexts", params={"filter": f'eq("name","{context_name}")'})
     if not response.ok:
@@ -165,7 +171,11 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
 
     # create session with given context
     uri = f'/compute/contexts/{sas_context["id"]}/sessions'
-    session_request = {"version": 1, "name": name}
+    if name != None:
+        session_request = {"version": 1, "name": name}
+    else:
+        # Create a unnamed session
+        session_request = {"version": 1}
 
     headers = {"Content-Type": "application/vnd.sas.compute.session.request+json"}
 
@@ -175,7 +185,10 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     if response.status_code != 201:
         raise RuntimeError(f"Failed to create session: {response.text}")
 
-    return response.json()
+    json_response=response.json()
+    print(f"Compute session {json_response['id']} created")
+
+    return json_response
 
 def end_compute_session(session: requests.Session, id):
     uri = f'/compute/sessions/{id}'

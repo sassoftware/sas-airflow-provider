@@ -60,17 +60,21 @@ class SASStudioOperator(BaseOperator):
         suitable default is used (see DEFAULT_COMPUTE_CONTEXT NAME).
     :param env_vars: (optional) Dictionary of environment variables to set before running the flow.
     :param macro_vars: (optional) Dictionary of macro variables to set before running the flow.
-    :param compute_session_id: (optional) Compute session id to use. If not specified, one will be created using the
-        default session name (see AIRFLOW_SESSION_NAME). Note that the name and the id are not the same. The name
-        will always be the value of AIRFLOW_SESSION_NAME, which means that if you don't supply a session id, then
-        this named session will be created or re-used. The advantage is that the same session can be re-used between
-        tasks. The disadvantage is that it offers less flexibility in terms of having multiple sessions.
+    :param allways_reuse_session: (optional) Specify true to always reuse the same Compute Session across all tasks. The name
+        of the session will be the default session name (see AIRFLOW_SESSION_NAME), which means that if you don't supply a session id in compute_session_id,
+        then this named session will be created and later re-used. The advantage of this is that the same session can be re-used between
+        tasks. The disadvantage is that it offers less flexibility in terms of having multiple sessions (parallelisme).
+        Default value is False meaning a new unnamed compute sessions will always be created UNLESS a session id is specified in compute_session_id.
+    :param compute_session_id: (optional) Compute Session id to use for the task. If a Session Id is specified, this will overide allways_reuse_session.
+        Use SASComputeCreateSession Operator in a task to create the session. This gives full flexibility in how compue session are used. 
+        The id of the session created by SASComputeCreateSession will be made avaliable as XCom variable 'compute_session_id' 
+        for subsequent use by SASStudio Operator tasks. Tip: set the value to "{{ ti.xcom_pull(key='compute_session_id', task_ids=['<task_id>'])|first}}" to get the X-Com value.
     :param output_macro_var_prefix: (optional) string. If this has a value, then any macro variables which start
         with this prefix will be retrieved from the session after the code has executed and will be returned as XComs
     :param unknown_state_timeout: (optional) number of seconds to continue polling for the state of a running job if the state is 
         temporary unobtainable. When unknown_state_timeout is reached without the state being retrievable, the operator 
         will throw an AirflowFailException and the task will be marked as failed. 
-        Default value is 0, meaning the task will fail immediately if the state could not be retrieved. 
+        Default value is 0, meaning the task will fail immediately if the state could not be retrieved.
     """
 
     ui_color = "#CCE5FF"
@@ -90,6 +94,7 @@ class SASStudioOperator(BaseOperator):
             compute_context=DEFAULT_COMPUTE_CONTEXT_NAME,
             env_vars=None,
             macro_vars=None,
+            allways_reuse_session=False,
             compute_session_id="",
             output_macro_var_prefix="",
             unknown_state_timeout=0,
@@ -110,6 +115,7 @@ class SASStudioOperator(BaseOperator):
         self.env_vars = env_vars
         self.macro_vars = macro_vars
         self.connection = None
+        self.allways_reuse_session = allways_reuse_session
         self.compute_session_id = compute_session_id
         self.output_macro_var_prefix = output_macro_var_prefix.upper()
         self.unknown_state_timeout=max(unknown_state_timeout,0)
@@ -127,6 +133,16 @@ class SASStudioOperator(BaseOperator):
             h = SasHook(self.connection_name)
             self.connection = h.get_conn()
 
+            # Create compute session
+            if not self.compute_session_id:
+                compute_session = create_or_connect_to_session(self.connection,
+                                                            self.compute_context_name, 
+                                                            AIRFLOW_SESSION_NAME if self.allways_reuse_session else None)
+                self.compute_session_id = compute_session["id"]
+            else:
+                self.log.info(f"Compute Session {self.compute_session_id} was provided")
+
+            # Generate SAS code
             if self.path_type == "raw":
                 code = self.path
             else:
@@ -217,25 +233,14 @@ class SASStudioOperator(BaseOperator):
         return pre_code
 
     def _generate_object_code(self):
-
-        uri = URI_BASE
+        uri=URI_BASE
 
         if self.path_type == "compute":
-            self.log.info("Code Generation for Studio object stored in Compute file system")
-
-            # if session id is provided, use it, otherwise create a session
-            if not self.compute_session_id:
-                self.log.info("Create or connect to session")
-                compute_session = create_or_connect_to_session(self.connection,
-                                                               self.compute_context_name, AIRFLOW_SESSION_NAME)
-                self.compute_session_id = compute_session["id"]
-            else:
-                self.log.info("Session ID was provided")
-
             uri = f"{URI_BASE}?sessionId={self.compute_session_id}"
+            self.log.info("Code Generation for Studio object stored in Compute file system")
         else:
             self.log.info("Code generation for Studio object stored in Content")
-
+       
         media_type = "application/vnd.sas.dataflow"
         if self.exec_type == "program":
             media_type = "application/vnd.sas.program"
@@ -296,7 +301,7 @@ class SASStudioOperator(BaseOperator):
                         # Print the log location to the DAG-log, in case the user needs access to the SAS-log while it is running.
                         if "logLocation" in job:
                             log_location=job["logLocation"];
-                            self.log.info(f"While the job is running the SAS-log formated at JSON can be found at URI: {log_location}?limit=9999999")
+                            self.log.info(f"While the job is running, the SAS-log formated as JSON can be found at URI: {log_location}?limit=9999999")
             except Exception as e:
                 countUnknownState = countUnknownState + 1
                 self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
