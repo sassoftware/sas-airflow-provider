@@ -24,7 +24,7 @@ from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
-from sas_airflow_provider.util.util import dump_logs, create_or_connect_to_session
+from sas_airflow_provider.util.util import dump_logs, create_or_connect_to_session, end_compute_session
 
 # main API URI for Code Gen
 URI_BASE = "/studioDevelopment/code"
@@ -36,7 +36,20 @@ AIRFLOW_SESSION_NAME = "Airflow-Session"
 JES_URI = "/jobExecution"
 JOB_URI = f"{JES_URI}/jobs"
 
+def on_success(context):
+    # Only kill session when not reused or external managed
+    context['task']._clean_up(also_kill_reused_session=False)
 
+def on_failure(context):
+    # Kill all sessions except external managed
+    context['task']._clean_up(also_kill_reused_session=True)
+
+def on_retry(context):
+    # Kill all sessions except external managed
+    context['task']._clean_up(also_kill_reused_session=True)
+
+
+       
 class SASStudioOperator(BaseOperator):
     """
     Executes a SAS Studio flow or a SAS program
@@ -62,11 +75,11 @@ class SASStudioOperator(BaseOperator):
     :param macro_vars: (optional) Dictionary of macro variables to set before running the flow.
     :param allways_reuse_session: (optional) Specify true to always reuse the same Compute Session across all tasks. The name
         of the session will be the default session name (see AIRFLOW_SESSION_NAME), which means that if you don't supply a session id in compute_session_id,
-        then this named session will be created and later re-used. The advantage of this is that the same session can be re-used between
-        tasks. The disadvantage is that it offers less flexibility in terms of having multiple sessions (parallelisme).
-        Default value is False meaning a new unnamed compute sessions will always be created UNLESS a session id is specified in compute_session_id.
+        then this named session will be created and later re-used between tasks. The disadvantage is that it offers less flexibility in terms of 
+        having multiple sessions (parallelisme). Default value is False meaning a new unnamed compute sessions will always be created 
+        UNLESS a session id is specified in compute_session_id.
     :param compute_session_id: (optional) Compute Session id to use for the task. If a Session Id is specified, this will overide allways_reuse_session.
-        Use SASComputeCreateSession Operator in a task to create the session. This gives full flexibility in how compue session are used. 
+        Use SASComputeCreateSession Operator to define a task that will create the session. This gives full flexibility in how compue session are used. 
         The id of the session created by SASComputeCreateSession will be made avaliable as XCom variable 'compute_session_id' 
         for subsequent use by SASStudio Operator tasks. Tip: set the value to "{{ ti.xcom_pull(key='compute_session_id', task_ids=['<task_id>'])|first}}" to get the X-Com value.
     :param output_macro_var_prefix: (optional) string. If this has a value, then any macro variables which start
@@ -80,6 +93,8 @@ class SASStudioOperator(BaseOperator):
     ui_color = "#CCE5FF"
     ui_fgcolor = "black"
 
+
+    
     template_fields: Sequence[str] = ("env_vars", "macro_vars", "compute_session_id", "path")
 
     def __init__(
@@ -116,10 +131,21 @@ class SASStudioOperator(BaseOperator):
         self.macro_vars = macro_vars
         self.connection = None
         self.allways_reuse_session = allways_reuse_session
-        self.compute_session_id = compute_session_id
+
+        self.external_managed_session = False
+        self.compute_session_id = None
+        if compute_session_id:
+            self.compute_session_id = compute_session_id
+            self.external_managed_session=True
+
         self.output_macro_var_prefix = output_macro_var_prefix.upper()
         self.unknown_state_timeout=max(unknown_state_timeout,0)
 
+        # Use hooks to clean up
+        self.on_success_callback=[on_success]
+        self.on_failure_callback=[on_failure]
+        self.on_retry_callback=[on_retry]
+    
     def execute(self, context):
         if self.path_type not in ['compute', 'content', 'raw']:
             raise AirflowFailException("Path type is invalid. Valid values are 'compute', 'content' or 'raw'")
@@ -173,7 +199,7 @@ class SASStudioOperator(BaseOperator):
         except Exception as e:
             raise AirflowException(f"SASStudioOperator error: {str(e)}")
 
-        
+      
         # Kick off the JES job.
         job, success = self._run_job_and_wait(jr, 10)
         job_state = job["state"]
@@ -188,7 +214,11 @@ class SASStudioOperator(BaseOperator):
 
         # set output variables
         if success and self.output_macro_var_prefix and self.compute_session_id:
-            self._set_output_variables(context)
+            try:
+                self._set_output_variables(context)
+            except Exception as e:
+                raise AirflowException(f"SASStudioOperator error: {str(e)}")
+
 
         # raise exception in Airflow if SAS Studio Flow ended execution with "failed" "canceled" or "timed out" state
         # support retry for 'failed' (typically there is an ERROR in the log) and 'timed out'
@@ -201,8 +231,30 @@ class SASStudioOperator(BaseOperator):
 
         elif job_state == "timed out":
             raise AirflowException("SAS Studio Execution has timed out. See log for details ")
-
+      
         return 1
+
+    def on_kill(self) -> None:
+        self._clean_up(also_kill_reused_session=True)
+
+    def _clean_up(self, also_kill_reused_session=False):
+        # Always kill unnamed sessions (allways_reuse_session is false)
+        # however is also_kill_reused_session is specified also kill the reuse session
+        # newer kill external managed sessions, as this may prevent restart
+        if self.compute_session_id and self.external_managed_session==False: 
+            if (also_kill_reused_session and self.allways_reuse_session) or self.allways_reuse_session==False:
+                try:
+                    self.log.info(f"Deleting session with id {self.compute_session_id}")
+                    success_end = end_compute_session(self.connection, self.compute_session_id)
+                    if success_end:
+                        self.log.info(f"Compute session succesfully deleted")
+                    else:
+                        self.log.info(f"Unable to delete compute session. You may need to kill the session manually")    
+                    self.compute_session_id=None
+
+                except Exception as e:
+                    self.log.info(f"Unable to delete compute session. You may need to kill the session manually")
+                    self.compute_session_id=None
 
     def _add_airflow_env_vars(self):
         for x in ['AIRFLOW_CTX_DAG_OWNER',
