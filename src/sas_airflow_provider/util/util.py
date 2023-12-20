@@ -19,6 +19,7 @@
 import json
 import requests
 import os
+import logging
 
 
 def get_folder_file_contents(session, path: str) -> str:
@@ -104,6 +105,41 @@ def get_uri(links, rel):
     if link is None:
         return None
     return link["uri"]
+
+
+def stream_log(session,job,start,limit=99999) -> int:
+    current_line=start
+
+    log_uri = get_uri(job["links"], "log")
+    if not log_uri:
+        logging.getLogger(name=None).warning("Warning: failed to retrieve log URI from links")
+    else:
+        try:
+            # Note if it is a files link (it will be that when the job have finished), this does not support the 'start' parameter, so we need to filter it by ourself.
+            # We will ignore the limit parameter in that case
+            is_files_link=log_uri.startswith("/files/")
+
+            r = session.get(f"{log_uri}/content?start={start}&limit={limit}")
+            if r.ok:
+                # Parse the json log format and print each line
+                log_contents = r.text            
+                jcontents = json.loads(log_contents)
+                lines=0;
+                for line in jcontents["items"]:
+                    if (is_files_link and lines>=start) or not is_files_link:
+                        t = line["type"]
+                        if t != "title":
+                            logging.getLogger(name=None).info(f'{line["line"]}')
+                        current_line=current_line+1      
+
+                    lines=lines+1
+            else:
+                logging.getLogger(name=None).warning(f"Failed to retrieve part of the log from URI: {log_uri}/content ")
+        except Exception as e:
+            logging.getLogger(name=None).warning("Unable to retrieve parts of the log.")
+            
+    return current_line
+    
 
 
 def dump_logs(session, job):

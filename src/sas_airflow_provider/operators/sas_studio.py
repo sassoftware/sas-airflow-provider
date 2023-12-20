@@ -24,7 +24,7 @@ from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
-from sas_airflow_provider.util.util import dump_logs, create_or_connect_to_session, end_compute_session
+from sas_airflow_provider.util.util import dump_logs, stream_log, create_or_connect_to_session, end_compute_session
 
 # main API URI for Code Gen
 URI_BASE = "/studioDevelopment/code"
@@ -145,7 +145,8 @@ class SASStudioOperator(BaseOperator):
         self.on_success_callback=[on_success]
         self.on_failure_callback=[on_failure]
         self.on_retry_callback=[on_retry]
-    
+
+        
     def execute(self, context):
         if self.path_type not in ['compute', 'content', 'raw']:
             raise AirflowFailException("Path type is invalid. Valid values are 'compute', 'content' or 'raw'")
@@ -199,26 +200,20 @@ class SASStudioOperator(BaseOperator):
         except Exception as e:
             raise AirflowException(f"SASStudioOperator error: {str(e)}")
 
-      
-        # Kick off the JES job.
+        # Kick off the JES job, wait to get the state
+        # _run_job_and_wait will poll for new 
+        # SAS log-lines and stream them in the DAG'-log
         job, success = self._run_job_and_wait(jr, 10)
-        job_state = job["state"]
-
-        # display logs if needed
-        if self.exec_log is True:
-            # Safeguard if we are unable to retreive the log. We will NOT throw any exceptions
-            try:
-                dump_logs(self.connection, job)
-            except Exception as e:
-                self.log.info("Unable to retrieve log. Maybe the log is too large.")
-
+        job_state= "unknown"
+        if "state" in job:
+            job_state = job["state"]
+     
         # set output variables
         if success and self.output_macro_var_prefix and self.compute_session_id:
             try:
                 self._set_output_variables(context)
             except Exception as e:
                 raise AirflowException(f"SASStudioOperator error: {str(e)}")
-
 
         # raise exception in Airflow if SAS Studio Flow ended execution with "failed" "canceled" or "timed out" state
         # support retry for 'failed' (typically there is an ERROR in the log) and 'timed out'
@@ -336,6 +331,7 @@ class SASStudioOperator(BaseOperator):
         state = "unknown"
         countUnknownState = 0
         log_location = None
+        num_log_lines= 0
         while state in ["pending", "running"] or (state == "unknown" and ((countUnknownState*poll_interval) <= self.unknown_state_timeout)):
             time.sleep(poll_interval)
 
@@ -348,12 +344,16 @@ class SASStudioOperator(BaseOperator):
                 else:
                     countUnknownState = 0
                     job = response.json()
-                    state = job["state"]
-                    if state == "running" and log_location == None:
-                        # Print the log location to the DAG-log, in case the user needs access to the SAS-log while it is running.
-                        if "logLocation" in job:
-                            log_location=job["logLocation"];
-                            self.log.info(f"While the job is running, the SAS-log formated as JSON can be found at URI: {log_location}?limit=9999999")
+                    if "state" in job:
+                        state = job["state"]
+                    else:
+                        self.log.info(f'Not able to determine state from {uri}. Will set state=unknown and continue checking...')
+                        state = "unknown"
+
+                    # Get the latest new log lines.
+                    if self.exec_log and state != "unknown":
+                        num_log_lines=stream_log(self.connection, job, num_log_lines)
+                            
             except Exception as e:
                 countUnknownState = countUnknownState + 1
                 self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
@@ -362,6 +362,10 @@ class SASStudioOperator(BaseOperator):
         if state == 'unknown':
             # Raise AirflowFailException as we don't know if the job is still running
             raise AirflowFailException(f'Unable to retrieve state of job after trying {countUnknownState} times. Will mark task as failed. Please check the SAS-log.')
+
+        # Be sure to Get the latest new log lines after the job have finished.
+        if self.exec_log:
+            num_log_lines=stream_log(self.connection, job, num_log_lines)
 
         self.log.info("Job request has completed execution with the status: " + str(state))
         success = True
