@@ -20,7 +20,7 @@ dag = DAG('validate_viya_daily', description='Validates Viya environment on a da
           start_date=datetime(2023, 5, 23), catchup=False)
 
 # Some important variables for all of the BashOperators
-endpoint = "https://example.race.sas.com/"
+endpoint = "https://example.com/"
 user = "example_user"
 password = "hunter2"
 
