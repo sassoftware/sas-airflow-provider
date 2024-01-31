@@ -22,11 +22,12 @@ import os
 import logging
 
 
-def get_folder_file_contents(session, path: str) -> str:
+def get_folder_file_contents(session, path: str, http_timeout=None) -> str:
     """
     Fetch a file from folder service
     :param session:
     :param path:
+    :param http_timeout: Timeout for http connection
     :return:
     """
     member = get_member_by_path(session, path)
@@ -34,25 +35,25 @@ def get_folder_file_contents(session, path: str) -> str:
         raise RuntimeError(f"folder item is not a file: '{path}'")
 
     uri = member['uri'] + '/content'
-    response = session.get(uri)
+    response = session.get(uri, timeout=http_timeout)
     if not response.ok:
         raise RuntimeError(f"File {path} was not found or could not be accessed. error code: {response.status_code}")
 
     return response.text
 
 
-def get_folder_by_path(session, path: str) -> dict:
+def get_folder_by_path(session, path: str, http_timeout=None) -> dict:
     """
     Get a folder given the path.
     Return a folder object, or raise an error
     """
-    response = session.get('/folders/folders/@item', params={'path': path})
+    response = session.get('/folders/folders/@item', params={'path': path}, timeout=http_timeout)
     if response.ok:
         return response.json()
     raise RuntimeError(response.text)
 
 
-def get_member_by_path(session, path: str) -> dict:
+def get_member_by_path(session, path: str, http_timeout=None) -> dict:
     """
     Get a folder member given the full path.
     Return a folder member (object), or an empty dict if not found
@@ -61,12 +62,12 @@ def get_member_by_path(session, path: str) -> dict:
     if len(parts) < 2:
         raise RuntimeError(f"invalid path '{path}'")
 
-    f = get_folder_by_path(session, parts[0])
+    f = get_folder_by_path(session, parts[0], http_timeout=http_timeout)
 
     uri = get_uri(f['links'], 'members')
     if not uri:
         raise RuntimeError("failed to find members uri link")
-    response = session.get(uri, params={'filter': f'eq("name","{parts[1]}")'})
+    response = session.get(uri, params={'filter': f'eq("name","{parts[1]}")'}, timeout=http_timeout)
 
     if not response.ok:
         raise RuntimeError(f"failed to get folder members for '{path}'")
@@ -79,18 +80,19 @@ def get_member_by_path(session, path: str) -> dict:
     return member
 
 
-def get_compute_session_file_contents(session, compute_session, path: str) -> str:
+def get_compute_session_file_contents(session, compute_session, path: str, http_timeout=None) -> str:
     """
     Fetch a file from the compute session file system
     :param session: the rest session that includes auth token
     :param compute_session: the compute session id
     :param path: full path to the file in the file system
+    :param http_timeout: Timeout for http connection
     :return: contents of the file
     """
     p = f'{path.replace("/", "~fs~")}'
     uri = f'/compute/sessions/{compute_session}/files/{p}/content'
 
-    response = session.get(uri, headers={"Accept": "application/octet-stream"})
+    response = session.get(uri, headers={"Accept": "application/octet-stream"}, timeout=http_timeout)
     if response.ok:
         return response.text
     raise RuntimeError(f"File {path} was not found or could not be accessed. error code: {response.status_code}")
@@ -107,19 +109,19 @@ def get_uri(links, rel):
     return link["uri"]
 
 
-def stream_log(session,job,start,limit=99999) -> int:
+def stream_log(session,job,start,limit=99999, http_timeout=None) -> int:
     current_line=start
 
     log_uri = get_uri(job["links"], "log")
     if not log_uri:
-        logging.getLogger(name=None).warning("Warning: failed to retrieve log URI from links")
+        logging.getLogger(name=None).warning("Warning: failed to retrieve log URI. Maybe the log is too large.")
     else:
         try:
             # Note if it is a files link (it will be that when the job have finished), this does not support the 'start' parameter, so we need to filter it by ourself.
             # We will ignore the limit parameter in that case
             is_files_link=log_uri.startswith("/files/")
 
-            r = session.get(f"{log_uri}/content?start={start}&limit={limit}")
+            r = session.get(f"{log_uri}/content?start={start}&limit={limit}", timeout=http_timeout)
             if r.ok:
                 # Parse the json log format and print each line
                 log_contents = r.text            
@@ -134,26 +136,27 @@ def stream_log(session,job,start,limit=99999) -> int:
 
                     lines=lines+1
             else:
-                logging.getLogger(name=None).warning(f"Failed to retrieve part of the log from URI: {log_uri}/content ")
+                logging.getLogger(name=None).warning(f"Failed to retrieve parts of the log with status code {r.status_code} from URI: {log_uri}/content. Maybe the log is too large.")
         except Exception as e:
-            logging.getLogger(name=None).warning("Unable to retrieve parts of the log.")
+            logging.getLogger(name=None).warning(f"Unable to retrieve parts of the log: {e}. Maybe the log is too large.")
             
     return current_line
     
 
 
-def dump_logs(session, job):
+def dump_logs(session, job, http_timeout=None):
     """
     Get the log from the job object
     :param session: rest session
     :param job: job object that should contain links object
+    :param http_timeout: Timeout for http connection
     """
 
     log_uri = get_uri(job["links"], "log")
     if not log_uri:
         print("Warning: failed to retrieve log uri from links. Log will not be displayed")
     else:
-        r = session.get(f"{log_uri}/content")
+        r = session.get(f"{log_uri}/content", timeout=http_timeout)
         if not r.ok:
             print("Warning: failed to retrieve log content. Log will not be displayed")
 
@@ -165,9 +168,9 @@ def dump_logs(session, job):
             if t != "title":
                 print(f'{line["line"]}')
 
-def find_named_compute_session(session: requests.Session, name: str) -> dict:
+def find_named_compute_session(session: requests.Session, name: str, http_timeout=None) -> dict:
     # find session with given name
-    response = session.get(f"/compute/sessions?filter=eq(name, {name})")
+    response = session.get(f"/compute/sessions?filter=eq(name, {name})", timeout=http_timeout)
     if not response.ok:
         raise RuntimeError(f"Find sessions failed: {response.status_code}")
     sessions = response.json()
@@ -176,18 +179,19 @@ def find_named_compute_session(session: requests.Session, name: str) -> dict:
         return sessions["items"][0]
     return {}
 
-def create_or_connect_to_session(session: requests.Session, context_name: str, name = None) -> dict:
+def create_or_connect_to_session(session: requests.Session, context_name: str, name = None, http_timeout=None) -> dict:
     """
     Connect to an existing compute session by name. If that named session does not exist,
     one is created using the context name supplied
     :param session: rest session that includes oauth token
     :param context_name: the context name to use to create the session if the session was not found
     :param name: name of session to find
+    :param http_timeout: Timeout for http connection
     :return: session object
 
     """
     if name != None:
-        compute_session = find_named_compute_session(session, name)
+        compute_session = find_named_compute_session(session, name, http_timeout=http_timeout)
         if compute_session:
             return compute_session
         
@@ -197,7 +201,7 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
 
 
     # find compute context
-    response = session.get("/compute/contexts", params={"filter": f'eq("name","{context_name}")'})
+    response = session.get("/compute/contexts", params={"filter": f'eq("name","{context_name}")'},timeout=http_timeout)
     if not response.ok:
         raise RuntimeError(f"Find context named {context_name} failed: {response.status_code}")
     context_resp = response.json()
@@ -216,7 +220,7 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     headers = {"Content-Type": "application/vnd.sas.compute.session.request+json"}
 
     req = json.dumps(session_request)
-    response = session.post(uri, data=req, headers=headers)
+    response = session.post(uri, data=req, headers=headers, timeout=http_timeout)
 
     if response.status_code != 201:
         raise RuntimeError(f"Failed to create session: {response.text}")
@@ -226,9 +230,9 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
 
     return json_response
 
-def end_compute_session(session: requests.Session, id):
+def end_compute_session(session: requests.Session, id, http_timeout=None):
     uri = f'/compute/sessions/{id}'
-    response = session.delete(uri)
+    response = session.delete(uri, timeout=http_timeout)
     if not response.ok:
         return False
     return True

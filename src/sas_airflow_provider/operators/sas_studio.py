@@ -24,7 +24,7 @@ from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
-from sas_airflow_provider.util.util import dump_logs, stream_log, create_or_connect_to_session, end_compute_session
+from sas_airflow_provider.util.util import stream_log, create_or_connect_to_session, end_compute_session
 
 # main API URI for Code Gen
 URI_BASE = "/studioDevelopment/code"
@@ -88,6 +88,8 @@ class SASStudioOperator(BaseOperator):
         temporary unobtainable. When unknown_state_timeout is reached without the state being retrievable, the operator 
         will throw an AirflowFailException and the task will be marked as failed. 
         Default value is 0, meaning the task will fail immediately if the state could not be retrieved.
+    :para http_timeout: (optional) Timeout for https requests. Default value is (30.05, 300), meaning a connect timeout sligthly above 30 seoconds and 
+        a read timeout of 300 seconds where the operator will wait for the server to send a response.
     """
 
     ui_color = "#CCE5FF"
@@ -113,6 +115,7 @@ class SASStudioOperator(BaseOperator):
             compute_session_id="",
             output_macro_var_prefix="",
             unknown_state_timeout=0,
+            http_timeout=(30.05, 300),
             **kwargs,
     ) -> None:
 
@@ -146,6 +149,9 @@ class SASStudioOperator(BaseOperator):
         self.on_failure_callback=[on_failure]
         self.on_retry_callback=[on_retry]
 
+        # Timeout
+        self.http_timeout=http_timeout
+
         
     def execute(self, context):
         if self.path_type not in ['compute', 'content', 'raw']:
@@ -158,13 +164,14 @@ class SASStudioOperator(BaseOperator):
         try:
             self.log.info("Authenticate connection")
             h = SasHook(self.connection_name)
-            self.connection = h.get_conn()
+            self.connection = h.get_conn(http_timeout=self.http_timeout)
 
             # Create compute session
             if not self.compute_session_id:
                 compute_session = create_or_connect_to_session(self.connection,
                                                             self.compute_context_name, 
-                                                            AIRFLOW_SESSION_NAME if self.allways_reuse_session else None)
+                                                            AIRFLOW_SESSION_NAME if self.allways_reuse_session else None, 
+                                                            http_timeout=self.http_timeout)
                 self.compute_session_id = compute_session["id"]
             else:
                 self.log.info(f"Compute Session {self.compute_session_id} was provided")
@@ -240,7 +247,7 @@ class SASStudioOperator(BaseOperator):
             if (also_kill_reused_session and self.allways_reuse_session) or self.allways_reuse_session==False:
                 try:
                     self.log.info(f"Deleting session with id {self.compute_session_id}")
-                    success_end = end_compute_session(self.connection, self.compute_session_id)
+                    success_end = end_compute_session(self.connection, self.compute_session_id, http_timeout=self.http_timeout)
                     if success_end:
                         self.log.info(f"Compute session succesfully deleted")
                     else:
@@ -300,7 +307,7 @@ class SASStudioOperator(BaseOperator):
             "wrapperCode": self.codegen_wrap_code,
         }
 
-        response = self.connection.post(uri, json=req)
+        response = self.connection.post(uri, json=req, timeout=self.http_timeout)
         if not response.ok:
             raise RuntimeError(f"Code generation failed: {response.text}")
 
@@ -311,7 +318,7 @@ class SASStudioOperator(BaseOperator):
 
         #Kick off job request. if failures, no harm is done.
         try:
-            response = self.connection.post(uri, json=job_request)
+            response = self.connection.post(uri, json=job_request, timeout=self.http_timeout)
         except Exception as e:
             raise AirflowException(f"Error when creating Job Request {e}") 
 
@@ -336,7 +343,7 @@ class SASStudioOperator(BaseOperator):
             time.sleep(poll_interval)
 
             try:
-                response = self.connection.get(uri)
+                response = self.connection.get(uri, timeout=self.http_timeout)
                 if not response.ok:
                     countUnknownState = countUnknownState + 1
                     self.log.info(f'Invalid response code {response.status_code} from {uri}. Will set state=unknown and continue checking...')
@@ -352,7 +359,7 @@ class SASStudioOperator(BaseOperator):
 
                     # Get the latest new log lines.
                     if self.exec_log and state != "unknown":
-                        num_log_lines=stream_log(self.connection, job, num_log_lines)
+                        num_log_lines=stream_log(self.connection, job, num_log_lines, http_timeout=self.http_timeout)
                             
             except Exception as e:
                 countUnknownState = countUnknownState + 1
@@ -365,7 +372,7 @@ class SASStudioOperator(BaseOperator):
 
         # Be sure to Get the latest new log lines after the job have finished.
         if self.exec_log:
-            num_log_lines=stream_log(self.connection, job, num_log_lines)
+            num_log_lines=stream_log(self.connection, job, num_log_lines, http_timeout=self.http_timeout)
 
         self.log.info("Job request has completed execution with the status: " + str(state))
         success = True
@@ -381,7 +388,7 @@ class SASStudioOperator(BaseOperator):
 
         # retrieve variables from compute session
         uri = f"/compute/sessions/{self.compute_session_id}/variables?limit=999&filter=startsWith(name,'{self.output_macro_var_prefix}')"
-        response = self.connection.get(uri, headers={'Accept': '*/*'})
+        response = self.connection.get(uri, headers={'Accept': '*/*'}, timeout=self.http_timeout)
         if not response.ok:
             raise RuntimeError(f"get compute variables failed with {response.status_code}")
         v = response.json()["items"]
