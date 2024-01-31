@@ -7,7 +7,6 @@ import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-
 class SasHook(BaseHook):
     """Hook to manage connection to SAS"""
 
@@ -29,7 +28,7 @@ class SasHook(BaseHook):
         self.cert_verify = True
         self.grant_type = None
 
-    def get_conn(self):
+    def get_conn(self, http_timeout=None):
         """Returns a SAS connection."""
         if self.conn_id is None:
             self.conn_id = self.default_conn_name
@@ -55,11 +54,11 @@ class SasHook(BaseHook):
             self.log.info("Using custom TLS CA certificate bundle file")
 
         if not self.sas_conn:
-            self.sas_conn = self._create_session_for_connection()
+            self.sas_conn = self._create_session_for_connection(http_timeout=http_timeout)
 
         return self.sas_conn
 
-    def _create_session_for_connection(self):
+    def _create_session_for_connection(self, http_timeout=None):
         self.log.info(f"Creating session for connection named %s to host %s",
                       self.conn_id,
                       self.host)
@@ -82,12 +81,15 @@ class SasHook(BaseHook):
 
             self.log.info("Get oauth token (see README if this crashes)")
             response = requests.post(
-                f"{self.host}/SASLogon/oauth/token", data=payload, verify=self.cert_verify, headers=my_headers
+                    f"{self.host}/SASLogon/oauth/token", 
+                    data=payload, 
+                    verify=self.cert_verify,
+                    headers=my_headers,
+                    timeout=http_timeout
             )
-
             if response.status_code != 200:
-                raise RuntimeError(f"Get token failed: {response.text}")
-
+                raise RuntimeError(f"Get token failed with status code: {response.status_code}") 
+                
             r = response.json()
             self.token = r["access_token"]
 
