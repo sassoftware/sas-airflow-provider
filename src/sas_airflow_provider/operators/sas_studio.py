@@ -146,7 +146,12 @@ class SASStudioOperator(BaseOperator):
 
         # Use hooks to clean up
         self.on_success_callback=[on_success]
-        self.on_failure_callback=[on_failure]
+        
+        if self.on_failure_callback == None:
+           self.on_failure_callback=[on_failure]
+        else:
+            self.on_failure_callback=[on_failure, self.on_failure_callback]
+        
         self.on_retry_callback=[on_retry]
 
         # Timeout
