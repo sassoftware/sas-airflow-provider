@@ -38,9 +38,12 @@ In order to connect to SAS Viya from the Airflow operator, you will need to crea
 Please be aware of security considerations when storing sensitive information in a
 connection. Consult https://airflow.apache.org/docs/apache-airflow/stable/security/index.html for details.
 TLS verification can be disabled (not recommended) by specifying the following in
-the extra field `{"ssl_certificate_verification": false }` 
+the extra field `{"ssl_certificate_verification": false }`. 
+
 In addition, a custom TLS CA certificate bundle file can be used as follows:
-`{"ssl_certificate_verification": "/path/to/trustedcerts.pem"}`
+`{"ssl_certificate_verification": "/path/to/trustedcerts.pem"}`. Note that the path used for the CA certificate bundle must reference a location within the Airflow pods.
+
+Inbound security rules must allow communication from the Airflow web server pod through the ingress defined for SAS Viya. Connection timeout errors might occur if the rule is not in place.
 
 ### Running a DAG with a SAS provider
 See example files in the src/sas_airflow_provider/example_dags directory. These dags can be modified and 

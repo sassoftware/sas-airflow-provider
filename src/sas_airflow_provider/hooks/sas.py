@@ -79,7 +79,7 @@ class SasHook(BaseHook):
                 payload["username"] = self.login
                 payload["password"] = self.password
 
-            self.log.info("Get oauth token (see README if this crashes)")
+            self.log.info("Get oauth token (see the the https://github.com/sassoftware/sas-airflow-provider?tab=readme-ov-file#create-a-connection-to-sas if this crashes)")
             response = requests.post(
                     f"{self.host}/SASLogon/oauth/token", 
                     data=payload, 
