@@ -381,7 +381,7 @@ class SASStudioOperator(BaseOperator):
 
         self.log.info("Job request has completed execution with the status: " + str(state))
         success = True
-        if state in ['failed', 'canceled', 'timed out']:
+        if state in ['failed', 'canceled', 'timed out', 'timedOut']:
             success = False
             if 'error' in job:
                 self.log.error(job['error'])
