@@ -143,6 +143,9 @@ class SASStudioFlowOperator(BaseOperator):
         if job_state == "timed out":
             raise AirflowException("SAS Studio Flow Execution has timed out. See log for details ")
 
+        if job_state == "timedOut":
+            raise AirflowException("SAS Studio Flow Execution has timed out. See log for details ")
+
         return 1
 
 
