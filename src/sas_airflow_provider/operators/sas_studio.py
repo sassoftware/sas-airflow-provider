@@ -238,7 +238,10 @@ class SASStudioOperator(BaseOperator):
 
         elif job_state == "timed out":
             raise AirflowException("SAS Studio Execution has timed out. See log for details ")
-      
+
+        elif job_state == "timedOut":
+            raise AirflowException("SAS Studio Execution has timed out. See log for details ")
+            
         return 1
 
     def on_kill(self) -> None:
