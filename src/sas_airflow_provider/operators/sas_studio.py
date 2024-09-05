@@ -88,8 +88,12 @@ class SASStudioOperator(BaseOperator):
         temporary unobtainable. When unknown_state_timeout is reached without the state being retrievable, the operator 
         will throw an AirflowFailException and the task will be marked as failed. 
         Default value is 0, meaning the task will fail immediately if the state could not be retrieved.
-    :para http_timeout: (optional) Timeout for https requests. Default value is (30.05, 300), meaning a connect timeout sligthly above 30 seoconds and 
+    :param http_timeout: (optional) Timeout for https requests. Default value is (30.05, 300), meaning a connect timeout sligthly above 30 seoconds and 
         a read timeout of 300 seconds where the operator will wait for the server to send a response.
+    :param job_name_prefix: (optional) string. Specify a name that you want the compute session to identify as in SAS Workload Orchestrator (SWO). 
+        If job_name_prefix is not specified the default prefix is determined by Viya (currently 'sas-compute-server-'). 
+        If the value cannot be parsed by Viya to create a valid k8s pod name, the default value will be used as well.
+        job_name_prefix is supported from Viya Stable 2024.07
     """
 
     ui_color = "#CCE5FF"
@@ -115,6 +119,7 @@ class SASStudioOperator(BaseOperator):
             compute_session_id="",
             output_macro_var_prefix="",
             unknown_state_timeout=0,
+            job_name_prefix=None,
             http_timeout=(30.05, 300),
             **kwargs,
     ) -> None:
@@ -134,6 +139,7 @@ class SASStudioOperator(BaseOperator):
         self.macro_vars = macro_vars
         self.connection = None
         self.allways_reuse_session = allways_reuse_session
+        self.job_name_prefix = job_name_prefix
 
         self.external_managed_session = False
         self.compute_session_id = None
@@ -176,7 +182,9 @@ class SASStudioOperator(BaseOperator):
                 compute_session = create_or_connect_to_session(self.connection,
                                                             self.compute_context_name, 
                                                             AIRFLOW_SESSION_NAME if self.allways_reuse_session else None, 
-                                                            http_timeout=self.http_timeout)
+                                                            http_timeout=self.http_timeout,
+                                                            job_name_prefix=self.job_name_prefix
+                                                            )
                 self.compute_session_id = compute_session["id"]
             else:
                 self.log.info(f"Compute Session {self.compute_session_id} was provided")
