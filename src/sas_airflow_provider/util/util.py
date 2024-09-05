@@ -179,7 +179,7 @@ def find_named_compute_session(session: requests.Session, name: str, http_timeou
         return sessions["items"][0]
     return {}
 
-def create_or_connect_to_session(session: requests.Session, context_name: str, name = None, http_timeout=None) -> dict:
+def create_or_connect_to_session(session: requests.Session, context_name: str, name = None, http_timeout=None, job_name_prefix = None) -> dict:
     """
     Connect to an existing compute session by name. If that named session does not exist,
     one is created using the context name supplied
@@ -187,6 +187,7 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     :param context_name: the context name to use to create the session if the session was not found
     :param name: name of session to find
     :param http_timeout: Timeout for http connection
+    :param job_name_prefix: (optional) string. The name that you want the compute session to identify as in SAS Workload Orchestrator (SWO). job_name_prefix is supported from Viya Stable 2024.07 and forward 
     :return: session object
 
     """
@@ -212,10 +213,16 @@ def create_or_connect_to_session(session: requests.Session, context_name: str, n
     # create session with given context
     uri = f'/compute/contexts/{sas_context["id"]}/sessions'
     if name != None:
-        session_request = {"version": 1, "name": name}
+        if job_name_prefix != None:
+            session_request = {"version": 1, "name": name, "attributes":{"jobNamePrefix":job_name_prefix}}
+        else:
+            session_request = {"version": 1, "name": name}
     else:
         # Create a unnamed session
-        session_request = {"version": 1}
+        if job_name_prefix != None:
+            session_request = {"version": 1, "attributes":{"jobNamePrefix":job_name_prefix}}
+        else:
+            session_request = {"version": 1}
 
     headers = {"Content-Type": "application/vnd.sas.compute.session.request+json"}
 
