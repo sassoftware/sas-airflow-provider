@@ -114,7 +114,7 @@ def stream_log(session,job,start,limit=99999, http_timeout=None) -> int:
 
     log_uri = get_uri(job["links"], "log")
     if not log_uri:
-        logging.getLogger(name=None).warning("Warning: failed to retrieve log URI. Maybe the log is too large.")
+        logging.getLogger(name=None).warning("Warning: failed to retrieve log URI from links. Maybe the log is too large.")
     else:
         try:
             # Note if it is a files link (it will be that when the job have finished), this does not support the 'start' parameter, so we need to filter it by ourself.

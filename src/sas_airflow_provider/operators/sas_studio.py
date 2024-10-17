@@ -369,6 +369,7 @@ class SASStudioOperator(BaseOperator):
                     job = response.json()
                     if "state" in job:
                         state = job["state"]
+                        self.log.info(f"Job state is {state}")
                     else:
                         self.log.info(f'Not able to determine state from {uri}. Will set state=unknown and continue checking...')
                         state = "unknown"
