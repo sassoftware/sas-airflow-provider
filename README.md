@@ -7,7 +7,7 @@
 * Specify whether SAS logs of a SAS Studio Flow execution should be returned and displayed in Airflow
 * Specify parameters (init_code, wrap_code) to be used for code generation
 * Honor return code of a SAS Studio Flow in Airflow. In particular, if a SAS Studio Flow fails, Airflow raises an exception as well and stops execution
-* Authenticate via oauth token or via user/password (i.e. generation of oauth token prior to each call).
+* Authenticate via oauth token or via user/password (i.e. generation of oauth token prior to each call)
 
 
 ## Getting started
