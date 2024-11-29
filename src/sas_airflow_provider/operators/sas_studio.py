@@ -224,7 +224,7 @@ class SASStudioOperator(BaseOperator):
         # Kick off the JES job, wait to get the state
         # _run_job_and_wait will poll for new 
         # SAS log-lines and stream them in the DAG'-log
-        job, success = self._run_job_and_wait(jr, 0.5)
+        job, success = self._run_job_and_wait(jr, 10)
         job_state= "unknown"
         if "state" in job:
             job_state = job["state"]
