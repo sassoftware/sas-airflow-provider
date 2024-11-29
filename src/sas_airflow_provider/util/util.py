@@ -21,6 +21,9 @@ import requests
 import os
 import logging
 
+from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowTaskTimeout
+
 
 def get_folder_file_contents(session, path: str, http_timeout=None) -> str:
     """
@@ -138,7 +141,11 @@ def stream_log(session,job,start,limit=99999, http_timeout=None) -> int:
             else:
                 logging.getLogger(name=None).warning(f"Failed to retrieve parts of the log with status code {r.status_code} from URI: {log_uri}/content. Maybe the log is too large.")
         except Exception as e:
-            logging.getLogger(name=None).warning(f"Unable to retrieve parts of the log: {e}. Maybe the log is too large.")
+            # Makes sure to forward any AirflowException's encountered during log retrieval
+            if isinstance(e,AirflowTaskTimeout) or isinstance(e,AirflowException):
+                raise
+            else:
+                logging.getLogger(name=None).warning(f"Unable to retrieve parts of the log: {e}. Maybe the log is too large.")
             
     return current_line
     
