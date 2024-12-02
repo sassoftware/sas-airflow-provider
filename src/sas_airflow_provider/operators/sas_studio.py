@@ -380,7 +380,7 @@ class SASStudioOperator(BaseOperator):
                         num_log_lines=stream_log(self.connection, job, num_log_lines, http_timeout=self.http_timeout)
                             
             except Exception as e:
-                # Makes sure to forward any AirflowException's encountered during state checking, else continue checking.
+                # We makes sure to forward any AirflowException's encountered during state checking, else continue checking.
                 if isinstance(e,AirflowTaskTimeout) or isinstance(e,AirflowException):
                     raise
                 else:
