@@ -22,6 +22,7 @@ import time
 
 from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowTaskTimeout
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import stream_log, create_or_connect_to_session, end_compute_session
@@ -379,9 +380,13 @@ class SASStudioOperator(BaseOperator):
                         num_log_lines=stream_log(self.connection, job, num_log_lines, http_timeout=self.http_timeout)
                             
             except Exception as e:
-                countUnknownState = countUnknownState + 1
-                self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
-                state = "unknown"
+                # We makes sure to forward any AirflowException's encountered during state checking, else continue checking.
+                if isinstance(e,AirflowTaskTimeout) or isinstance(e,AirflowException):
+                    raise
+                else:
+                    countUnknownState = countUnknownState + 1
+                    self.log.info(f'HTTP Call failed with error "{e}". Will set state=unknown and continue checking...')
+                    state = "unknown"
                 
         if state == 'unknown':
             # Raise AirflowFailException as we don't know if the job is still running
