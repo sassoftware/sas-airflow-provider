@@ -91,6 +91,7 @@ class SASStudioOperator(BaseOperator):
         Default value is 0, meaning the task will fail immediately if the state could not be retrieved.
     :param http_timeout: (optional) Timeout for https requests. Default value is (30.05, 300), meaning a connect timeout sligthly above 30 seoconds and 
         a read timeout of 300 seconds where the operator will wait for the server to send a response.
+    :param expiration_time: (optional) string. If specified, this is a W3 duration string that indicates how long the job should live. eg "PT1H" for 1 hour.
     :param job_name_prefix: (optional) string. Specify a name that you want the compute session to identify as in SAS Workload Orchestrator (SWO). 
         If job_name_prefix is not specified the default prefix is determined by Viya (currently 'sas-compute-server-'). 
         If the value cannot be parsed by Viya to create a valid k8s pod name, the default value will be used as well.
@@ -102,7 +103,7 @@ class SASStudioOperator(BaseOperator):
 
 
     
-    template_fields: Sequence[str] = ("env_vars", "macro_vars", "compute_session_id", "path")
+    template_fields: Sequence[str] = ("env_vars", "macro_vars", "compute_session_id", "path", "expiration_time", "job_name_prefix")
 
     def __init__(
             self,
@@ -122,6 +123,7 @@ class SASStudioOperator(BaseOperator):
             unknown_state_timeout=0,
             job_name_prefix=None,
             http_timeout=(30.05, 300),
+            expiration_time="",
             **kwargs,
     ) -> None:
 
@@ -141,6 +143,7 @@ class SASStudioOperator(BaseOperator):
         self.connection = None
         self.allways_reuse_session = allways_reuse_session
         self.job_name_prefix = job_name_prefix
+        self.expiration_time = expiration_time
 
         self.external_managed_session = False
         self.compute_session_id = None
@@ -170,7 +173,9 @@ class SASStudioOperator(BaseOperator):
             raise AirflowFailException("Path type is invalid. Valid values are 'compute', 'content' or 'raw'")
         if self.exec_type not in ['flow', 'program']:
             raise AirflowFailException("Execution type is invalid. Valid values are 'flow' and 'program'")
-
+        # make sure expiration time is valid w3 duration
+        if self.expiration_time and not self.expiration_time.startswith("P"):
+                raise AirflowFailException("Expiration time is not a valid W3 duration string")
         self._add_airflow_env_vars()
 
         try:
@@ -204,8 +209,10 @@ class SASStudioOperator(BaseOperator):
             # Create the job request for JES
             jr = {
                 "name": f"Airflow_{self.task_id}",
-                "jobDefinition": {"type": "Compute", "code": final_code}
+                "jobDefinition": {"type": "Compute", "code": final_code},
             }
+            if self.expiration_time:
+                jr['expiresAfter'] = self.expiration_time
 
             # if we have a session id, we will use that, otherwise we'll use the context name
             if self.compute_session_id:
@@ -342,7 +349,8 @@ class SASStudioOperator(BaseOperator):
         # change to process non-standard codes returned from API (201, 400, 415)
         # i.e. situation when we were not able to make API call at all
         if response.status_code != 201:
-            raise AirflowException(f"Failed to create job request. Repsonse status code was: {response.status_code}")
+            err_text = f"Failed to create job request. Status: {response.status_code}. Error: {response.text}"
+            raise AirflowException(err_text)
         
         # Job started succesfully, start waiting for the job to finish
         job = response.json()
@@ -362,9 +370,14 @@ class SASStudioOperator(BaseOperator):
             try:
                 response = self.connection.get(uri, timeout=self.http_timeout)
                 if not response.ok:
-                    countUnknownState = countUnknownState + 1
-                    self.log.info(f'Invalid response code {response.status_code} from {uri}. Will set state=unknown and continue checking...')
-                    state = "unknown"
+                    if response.status_code == 404:
+                        # this could happen if the job was deleted
+                        self.log.info(f'Job {job_id} was not found and may have been deleted.')
+                        state = "canceled"
+                    else:
+                        countUnknownState = countUnknownState + 1
+                        self.log.info(f'Invalid response code {response.status_code} from {uri}. Will set state=unknown and continue checking...')
+                        state = "unknown"
                 else:
                     countUnknownState = 0
                     job = response.json()

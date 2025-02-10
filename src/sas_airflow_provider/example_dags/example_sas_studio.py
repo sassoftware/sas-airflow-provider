@@ -37,4 +37,5 @@ task1 = SASStudioOperator(task_id='demo_studio_flow_1.flw',
                               codegen_wrap_code=False,
                               connection_name='sas_default',
                               env_vars=environment_vars,
+                              expiration_time="P1D",
                               dag=dag)
