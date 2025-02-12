@@ -51,7 +51,7 @@ class SASStudioFlowOperator(BaseOperator):
     """
 
     ui_color = "#CCE5FF"
-    ui_fgcolor = "black"
+    ui_fgcolor = "#000000"
 
     template_fields: Sequence[str] = ("env_vars",)
 

@@ -43,7 +43,7 @@ class SASComputeCreateSession(BaseOperator):
     """
 
     ui_color = "#CCE5FF"
-    ui_fgcolor = "black"
+    ui_fgcolor = "#000000"
 
     # template fields are fields which can be templated out in the Airflow task using {{ }}
     template_fields: Sequence[str] = ("compute_context_name", "session_name")

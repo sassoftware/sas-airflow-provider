@@ -99,7 +99,7 @@ class SASStudioOperator(BaseOperator):
     """
 
     ui_color = "#CCE5FF"
-    ui_fgcolor = "black"
+    ui_fgcolor = "#000000"
 
 
     

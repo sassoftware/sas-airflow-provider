@@ -36,7 +36,7 @@ class SASComputeDeleteSession(BaseOperator):
     """
 
     ui_color = "#CCE5FF"
-    ui_fgcolor = "black"
+    ui_fgcolor = "#000000"
 
     # template fields are fields which can be templated out in the Airflow task using {{ }}
     template_fields: Sequence[str] = ("compute_session_id", "compute_session_name")
