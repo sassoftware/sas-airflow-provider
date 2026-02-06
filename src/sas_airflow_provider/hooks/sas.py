@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from airflow.hooks.base import BaseHook
+from airflow import __version__ as version
+airflow_major_version = int(version.split('.')[0])
+
 import base64
 import urllib.parse
 import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
+
+if airflow_major_version < 3:
+    from airflow.hooks.base import BaseHook
+    from airflow.models import Variable
+else:
+    from airflow.sdk.bases.hook import BaseHook
+    from airflow.sdk import Variable
 
 class SasHook(BaseHook):
     """Hook to manage connection to SAS"""
@@ -38,7 +47,15 @@ class SasHook(BaseHook):
         self.password = conn.password
 
         extras = conn.extra_dejson
-        self.token = extras.get("token")
+
+        """ Get token from variable if configured this way, else see if is configured directly in extra """
+        token_variable_name = extras.get("token_variable")
+        if token_variable_name != None:
+            self.log.info(f"Access Token is retrieved from global variable")
+            self.token = Variable.get(token_variable_name)
+        else:
+            self.token = extras.get("token")
+
         self.client_id = extras.get("client_id")
         self.grant_type = extras.get("grant_type", "password")
         self.client_secret = ""
