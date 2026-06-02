@@ -52,3 +52,49 @@ class TestSasJobExecutionOperator:
         session_mock.return_value.get_conn.return_value.post.assert_called_with('/SASJobExecution/?_program=/Public/my_job&a=b',
                                                           headers={
                                                               'Accept': 'application/vnd.sas.job.execution.job+json'})
+
+    @patch("sas_airflow_provider.operators.sas_jobexecution.SasHook")
+    def test_execute_sas_job_execution_operator_with_compute_context(self, session_mock):
+        """
+        Test operation with a compute context appended to the request URL.
+        """
+        session_mock.return_value.get_conn.return_value.post.return_value.status_code = 200
+        session_mock.return_value.get_conn.return_value.post.return_value.headers.get = mock_ret_headers
+
+        operator = SASJobExecutionOperator(
+            task_id='test_compute_context',
+            connection_name='SAS',
+            job_name='/Public/my_job',
+            parameters={'a': 'b'},
+            compute_context='My Context',
+        )
+
+        operator.execute(context={})
+
+        session_mock.return_value.get_conn.return_value.post.assert_called_with(
+            '/SASJobExecution/?_program=/Public/my_job&a=b&_contextname=My%20Context',
+            headers={'Accept': 'application/vnd.sas.job.execution.job+json'},
+        )
+
+    @patch("sas_airflow_provider.operators.sas_jobexecution.SasHook")
+    def test_execute_sas_job_execution_operator_url_encodes_compute_context(self, session_mock):
+        """
+        Test compute context is URL encoded before sending the request.
+        """
+        session_mock.return_value.get_conn.return_value.post.return_value.status_code = 200
+        session_mock.return_value.get_conn.return_value.post.return_value.headers.get = mock_ret_headers
+
+        operator = SASJobExecutionOperator(
+            task_id='test_compute_context_encoding',
+            connection_name='SAS',
+            job_name='/Public/my_job',
+            parameters={'a': 'b'},
+            compute_context='Prod Context & Primary=1',
+        )
+
+        operator.execute(context={})
+
+        session_mock.return_value.get_conn.return_value.post.assert_called_with(
+            '/SASJobExecution/?_program=/Public/my_job&a=b&_contextname=Prod%20Context%20%26%20Primary%3D1',
+            headers={'Accept': 'application/vnd.sas.job.execution.job+json'},
+        )

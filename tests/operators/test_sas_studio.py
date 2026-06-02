@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import Mock, patch
 
 from sas_airflow_provider.operators.sas_studio import (
     SASStudioOperator,
@@ -35,10 +35,9 @@ class TestSASStudioOperator:
 
     @patch.object(SASStudioOperator, '_run_job_and_wait')
     @patch.object(SASStudioOperator, '_generate_object_code')
-    @patch("sas_airflow_provider.operators.sas_studio.dump_logs")
     @patch("sas_airflow_provider.operators.sas_studio.SasHook")
     def test_execute_sas_studio_flow_operator_basic(
-        self, session_mock, dumplogs_mock, mock_gen_flow_code, mock_run_job_and_wait
+        self, session_mock, mock_gen_flow_code, mock_run_job_and_wait
     ):
         mock_gen_flow_code.return_value = {"code": "test code"}
         mock_run_job_and_wait.return_value = { "id": "jobid1",
@@ -53,6 +52,7 @@ class TestSASStudioOperator:
             exec_log=True,
             connection_name="SAS",
             compute_context="SAS Studio compute context",
+            compute_session_id="session-1",
             codegen_init_code=False,
             codegen_wrap_code=False,
             env_vars=environment_vars,
@@ -60,7 +60,6 @@ class TestSASStudioOperator:
 
         operator.execute(context={})
 
-        dumplogs_mock.assert_called()
         session_mock.assert_called_with("SAS")
         mock_gen_flow_code.assert_called()
         mock_run_job_and_wait.assert_called()
@@ -69,10 +68,10 @@ class TestSASStudioOperator:
         session = Mock()
         req_ret = Mock()
         session.get.return_value = req_ret
-        req_ret.json.return_value = {"count": 1, "items": ["dummy"]}
+        req_ret.json.return_value = {"count": 1, "items": [{"id": "dummy"}]}
         req_ret.status_code = 200
         r = create_or_connect_to_session(session, "context", "name")
-        assert r == "dummy"
+        assert r == {"id": "dummy"}
 
     def test_execute_sas_studio_flow_create_or_connect_new(self):
         session = Mock()
@@ -83,13 +82,13 @@ class TestSASStudioOperator:
         post_ret = Mock()
         session.post.return_value = post_ret
         post_ret.status_code = 201
-        post_ret.json.return_value = {"a": "b"}
+        post_ret.json.return_value = {"id": "11"}
         req_ret1.json.return_value = {"count": 0}
         req_ret1.status_code = 200
         req_ret2.json.return_value = {"count": 1, "items": [{"id": "10"}]}
         req_ret2.status_code = 200
         r = create_or_connect_to_session(session, "context", "name")
-        assert r == {"a": "b"}
+        assert r == {"id": "11"}
 
     def test_execute_sas_studio_flow_operator_gen_code(self):
         session = Mock()
@@ -116,17 +115,16 @@ class TestSASStudioOperator:
                 "initCode": True,
                 "wrapperCode": True,
             },
+            timeout=(30.05, 300),
         )
         assert r == {"code": "code val"}
 
-    @patch("sas_airflow_provider.operators.sas_studio.create_or_connect_to_session")
-    def test_execute_sas_studio_flow_operator_gen_code_compute(self, c_mock):
+    def test_execute_sas_studio_flow_operator_gen_code_compute(self):
         session = Mock()
         req_ret = Mock()
         session.post.return_value = req_ret
         req_ret.json.return_value = {"code": "code val"}
         req_ret.status_code = 200
-        c_mock.return_value = {"id": "abc"}
 
         op = SASStudioOperator(task_id="demo_studio_flow_1.flw",
                                    path_type="compute",
@@ -134,10 +132,8 @@ class TestSASStudioOperator:
                                    exec_log=True,
                                    codegen_init_code=True, codegen_wrap_code=True)
         op.connection = session
+        op.compute_session_id = "abc"
         r = op._generate_object_code()
-
-
-        c_mock.assert_called_with(ANY, "SAS Studio compute context", "Airflow-Session")
 
         session.post.assert_called_with(
             "/studioDevelopment/code?sessionId=abc",
@@ -150,22 +146,25 @@ class TestSASStudioOperator:
                 "initCode": True,
                 "wrapperCode": True,
             },
+            timeout=(30.05, 300),
         )
         assert r == {"code": "code val"}
 
     def test_execute_sas_studio_flow_run_job(self):
         session_mock = Mock()
         session_mock.post.return_value.status_code = 201
-        session_mock.post.return_value.json.return_value = {"id": "1", "state": "completed"}
+        session_mock.post.return_value.json.return_value = {"id": "1", "state": "running"}
+        session_mock.get.return_value.ok = True
+        session_mock.get.return_value.json.return_value = {"id": "1", "state": "completed"}
         req = {"a": "b"}
         op = SASStudioOperator(task_id="demo_studio_flow_1.flw",
                                    path_type="compute",
                                    path="/path",
-                                   exec_log=True,
+                                   exec_log=False,
                                    codegen_init_code=True, codegen_wrap_code=True)
         op.connection = session_mock
         r = op._run_job_and_wait(req, 1)
-        session_mock.post.assert_called_with("/jobExecution/jobs", json={"a": "b"})
+        session_mock.post.assert_called_with("/jobExecution/jobs", json={"a": "b"}, timeout=(30.05, 300))
         assert r == ({"id": "1", "state": "completed"}, True)
 
     def test_execute_sas_studio_flow_get_logs(self):
@@ -176,4 +175,4 @@ class TestSASStudioOperator:
             """
         req = {"links": [{"rel": "log", "uri": "log/uri"}]}
         dump_logs(session_mock, req)
-        session_mock.get.assert_called_with("log/uri/content")
+        session_mock.get.assert_called_with("log/uri/content", timeout=None)
