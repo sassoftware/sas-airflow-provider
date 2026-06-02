@@ -23,8 +23,10 @@ import urllib.parse
 
 from airflow.exceptions import AirflowFailException
 from airflow.models import BaseOperator
+
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import dump_logs
+
 
 class SASJobExecutionOperator(BaseOperator):
     """
@@ -40,31 +42,39 @@ class SASJobExecutionOperator(BaseOperator):
     :param job_exec_log: boolean. whether or not to dump out the log (default is false)
     :param add_airflow_vars: boolean. whether or not to add airflow environment variables as macro variables
        (default is false)
+    :param compute_context: if provided will pass _contextname parameter to SASJobExecution endpoint.
+       this allows you to specify a context name
     """
 
     template_fields: Sequence[str] = ("parameters",)
 
-    def __init__(self,
-                 job_name: str,
-                 parameters: dict,
-                 connection_name: str = None,
-                 job_exec_log: bool = False,
-                 add_airflow_vars: bool = False,
-                 **kwargs) -> None:
+    def __init__(
+        self,
+        job_name: str,
+        parameters: dict,
+        connection_name: str = None,
+        job_exec_log: bool = False,
+        add_airflow_vars: bool = False,
+        compute_context: str = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.connection_name = connection_name
         self.job_name = job_name
         self.parameters = parameters
         self.job_exec_log = job_exec_log
         self.add_airflow_vars = add_airflow_vars
+        self.compute_context = compute_context
 
     def _add_airflow_env_vars(self):
-        for x in ['AIRFLOW_CTX_DAG_OWNER',
-                  'AIRFLOW_CTX_DAG_ID',
-                  'AIRFLOW_CTX_TASK_ID',
-                  'AIRFLOW_CTX_EXECUTION_DATE',
-                  'AIRFLOW_CTX_TRY_NUMBER',
-                  'AIRFLOW_CTX_DAG_RUN_ID', ]:
+        for x in [
+            "AIRFLOW_CTX_DAG_OWNER",
+            "AIRFLOW_CTX_DAG_ID",
+            "AIRFLOW_CTX_TASK_ID",
+            "AIRFLOW_CTX_EXECUTION_DATE",
+            "AIRFLOW_CTX_TRY_NUMBER",
+            "AIRFLOW_CTX_DAG_RUN_ID",
+        ]:
             v = os.getenv(x)
             if v:
                 self.parameters[x] = v
@@ -85,28 +95,38 @@ class SASJobExecutionOperator(BaseOperator):
             url_string += f"&{key}={urllib.parse.quote(value)}"
 
         url = f"/SASJobExecution/?_program={program_name}{url_string}"
+        if self.compute_context:
+            url += f"&_contextname={urllib.parse.quote(self.compute_context)}"
 
         headers = {"Accept": "application/vnd.sas.job.execution.job+json"}
         response = session.post(url, headers=headers)
 
         if response.status_code < 200 or response.status_code >= 300:
-            raise AirflowFailException(f"SAS Job Execution HTTP status code {response.status_code}")
+            raise AirflowFailException(
+                f"SAS Job Execution HTTP status code {response.status_code}"
+            )
 
-        error_code = response.headers.get('X-Sas-Jobexec-Error')
+        error_code = response.headers.get("X-Sas-Jobexec-Error")
         if error_code:
             print(response.text)
-            raise AirflowFailException(f"SAS Job Execution failed with code {error_code}")
+            raise AirflowFailException(
+                f"SAS Job Execution failed with code {error_code}"
+            )
 
         if self.job_exec_log:
-            job_id = response.headers.get('X-Sas-Jobexec-Id')
+            job_id = response.headers.get("X-Sas-Jobexec-Id")
             if job_id:
                 job_status_url = f"/jobExecution/jobs/{job_id}"
                 job = session.get(job_status_url)
                 if job.status_code >= 200:
                     dump_logs(session, job.json())
                 else:
-                    print(f"Failed to get job status for logs. /jobExecution/jobs returned {job.status_code}")
+                    print(
+                        f"Failed to get job status for logs. /jobExecution/jobs returned {job.status_code}"
+                    )
             else:
-                print("Failed to get job id for logs. X-Sas-Jobexec-Id not found in response headers")
+                print(
+                    "Failed to get job id for logs. X-Sas-Jobexec-Id not found in response headers"
+                )
 
         return 1
