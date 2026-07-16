@@ -20,7 +20,7 @@ from airflow import DAG
 from sas_airflow_provider.operators.sas_jobexecution import SASJobExecutionOperator
 
 dag = DAG('sas_hello_world_jes', description='Hello World SAS DAG',
-          schedule_interval='0 12 * * *',
+          schedule='0 12 * * *',
           start_date=datetime(2022, 6, 1), catchup=False)
 
 

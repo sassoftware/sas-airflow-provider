@@ -140,3 +140,11 @@ class SasHook(BaseHook):
             session, urllib.parse.urljoin(root_url, args[0]), *args[1:], **kwargs
         )
         return session
+
+    def test_connection(self):
+        """Test the SAS connection by attempting to obtain a session/token."""
+        try:
+            self.get_conn()
+        except Exception as e:
+            return False, str(e)
+        return True, "Successfully connected to SAS."

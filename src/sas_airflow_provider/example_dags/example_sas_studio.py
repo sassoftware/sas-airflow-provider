@@ -20,7 +20,7 @@ from airflow import DAG
 from sas_airflow_provider.operators.sas_studio import SASStudioOperator
 
 dag = DAG('demo_studio_flow_1', description='Executing Studio Flow for demo purposes',
-          schedule_interval='0 12 * * *',
+          schedule='0 12 * * *',
           start_date=datetime(2022, 6, 1), catchup=False)
 
 environment_vars = {
