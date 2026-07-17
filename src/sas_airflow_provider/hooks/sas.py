@@ -23,11 +23,13 @@ class SasHook(BaseHook):
     conn_type = 'sas'
     hook_name = 'SAS'
 
-    def __init__(self, conn_id: str = None) -> None:
+    def __init__(self, sas_conn_id: str = None, conn_id: str = None) -> None:
         super().__init__()
         self.client_secret = None
         self.client_id = None
-        self.conn_id = conn_id
+        # conn_id is legacy and would probably not have been used by anyone,
+        # but just in case
+        self.conn_id = sas_conn_id if sas_conn_id is not None else conn_id
         self.host = None
         self.login = None
         self.password = None
@@ -138,3 +140,11 @@ class SasHook(BaseHook):
             session, urllib.parse.urljoin(root_url, args[0]), *args[1:], **kwargs
         )
         return session
+
+    def test_connection(self):
+        """Test the SAS connection by attempting to obtain a session/token."""
+        try:
+            self.get_conn()
+        except Exception as e:
+            return False, str(e)
+        return True, "Successfully connected to SAS."
