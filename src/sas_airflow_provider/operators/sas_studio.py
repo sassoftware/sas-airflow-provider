@@ -20,9 +20,7 @@ from __future__ import annotations
 import os
 import time
 
-from airflow.exceptions import AirflowFailException
-from airflow.exceptions import AirflowException
-from airflow.exceptions import AirflowTaskTimeout
+from sas_airflow_provider.util.compat import AirflowFailException, AirflowException, AirflowTaskTimeout
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import stream_log, create_or_connect_to_session, end_compute_session

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from airflow.exceptions import AirflowException
+from sas_airflow_provider.util.compat import AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import \

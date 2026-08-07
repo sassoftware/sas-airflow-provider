@@ -24,8 +24,7 @@ import warnings
 
 import requests
 
-from airflow.exceptions import AirflowFailException
-from airflow.exceptions import AirflowException
+from sas_airflow_provider.util.compat import AirflowFailException, AirflowException
 from airflow.models import BaseOperator
 from sas_airflow_provider.hooks.sas import SasHook
 from sas_airflow_provider.util.util import dump_logs

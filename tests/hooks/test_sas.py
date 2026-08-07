@@ -24,7 +24,7 @@ class TestSasHook:
 
     @patch("requests.Session")
     @patch("requests.post")
-    @patch("airflow.hooks.base.BaseHook.get_connection")
+    @patch("sas_airflow_provider.hooks.sas.BaseHook.get_connection")
     def test_sas_hook(self, bh_mock, req_mock, sess_mock):
         bh_ret = Mock()
         bh_mock.return_value = bh_ret

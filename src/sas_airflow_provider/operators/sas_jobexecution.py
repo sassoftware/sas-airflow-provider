@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 import urllib.parse
 
-from airflow.exceptions import AirflowFailException
+from sas_airflow_provider.util.compat import AirflowFailException
 from airflow.models import BaseOperator
 
 from sas_airflow_provider.hooks.sas import SasHook

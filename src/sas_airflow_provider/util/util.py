@@ -21,8 +21,7 @@ import requests
 import os
 import logging
 
-from airflow.exceptions import AirflowException
-from airflow.exceptions import AirflowTaskTimeout
+from sas_airflow_provider.util.compat import AirflowException, AirflowTaskTimeout
 
 
 def get_folder_file_contents(session, path: str, http_timeout=None) -> str:
