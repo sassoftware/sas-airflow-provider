@@ -429,4 +429,4 @@ class SASStudioOperator(BaseOperator):
         # set Airflow variables
         for var in v:
             self.log.info(f"found output variable {var['name']}")
-            self.xcom_push(context, var['name'], var['value'])
+            context['ti'].xcom_push(key=var['name'], value=var['value'])

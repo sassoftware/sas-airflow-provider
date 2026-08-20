@@ -73,7 +73,7 @@ class SASComputeCreateSession(BaseOperator):
             h = SasHook(self.connection_name)
             self.connection = h.get_conn()
             self._connect_compute()
-            self.xcom_push(context, 'compute_session_id', self.compute_session_id)
+            context['ti'].xcom_push(key='compute_session_id', value=self.compute_session_id)
         # support retry if API-calls fails for whatever reason
         except Exception as e:
             raise AirflowException(f"SASComputeCreateSession error: {str(e)}")
