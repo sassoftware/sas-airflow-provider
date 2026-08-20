@@ -63,7 +63,7 @@ class SASComputeDeleteSession(BaseOperator):
             h = SasHook(self.connection_name)
             self.connection = h.get_conn()
             self._delete_compute()
-            self.xcom_push(context, 'disconnect_succeeded', self.success)
+            context['ti'].xcom_push(key='disconnect_succeeded', value=self.success)
         # support retry if API-calls fails for whatever reason
         except Exception as e:
             raise AirflowException(f"SASComputeDeleteSession error: {str(e)}")
