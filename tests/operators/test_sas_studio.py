@@ -56,6 +56,7 @@ class TestSASStudioOperator:
             codegen_init_code=False,
             codegen_wrap_code=False,
             env_vars=environment_vars,
+            poll_interval=5,
         )
 
         operator.execute(context={})
@@ -63,6 +64,7 @@ class TestSASStudioOperator:
         session_mock.assert_called_with("SAS")
         mock_gen_flow_code.assert_called()
         mock_run_job_and_wait.assert_called()
+        assert mock_run_job_and_wait.call_args[0][1] == 5
 
     def test_execute_sas_studio_flow_create_or_connect(self):
         session = Mock()
