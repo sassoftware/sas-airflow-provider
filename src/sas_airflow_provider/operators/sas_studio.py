@@ -87,6 +87,7 @@ class SASStudioOperator(BaseOperator):
         temporary unobtainable. When unknown_state_timeout is reached without the state being retrievable, the operator 
         will throw an AirflowFailException and the task will be marked as failed. 
         Default value is 0, meaning the task will fail immediately if the state could not be retrieved.
+    :param poll_interval: (optional) number of seconds between job-state polling requests. Default value is 10.
     :param http_timeout: (optional) Timeout for https requests. Default value is (30.05, 300), meaning a connect timeout sligthly above 30 seoconds and 
         a read timeout of 300 seconds where the operator will wait for the server to send a response.
     :param expiration_time: (optional) string. If specified, this is a W3 duration string that indicates how long the job should live. eg "PT1H" for 1 hour.
@@ -122,6 +123,7 @@ class SASStudioOperator(BaseOperator):
             job_name_prefix=None,
             http_timeout=(30.05, 300),
             expiration_time="",
+            poll_interval=10,
             **kwargs,
     ) -> None:
 
@@ -142,6 +144,9 @@ class SASStudioOperator(BaseOperator):
         self.allways_reuse_session = allways_reuse_session
         self.job_name_prefix = job_name_prefix
         self.expiration_time = expiration_time
+        self.poll_interval = poll_interval
+        if self.poll_interval <= 0:
+            raise AirflowFailException("poll_interval must be greater than 0")
 
         self.external_managed_session = False
         self.compute_session_id = None
@@ -229,7 +234,7 @@ class SASStudioOperator(BaseOperator):
         # Kick off the JES job, wait to get the state
         # _run_job_and_wait will poll for new 
         # SAS log-lines and stream them in the DAG'-log
-        job, success = self._run_job_and_wait(jr, 10)
+        job, success = self._run_job_and_wait(jr, self.poll_interval)
         job_state= "unknown"
         if "state" in job:
             job_state = job["state"]
