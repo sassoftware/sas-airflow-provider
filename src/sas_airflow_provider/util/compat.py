@@ -20,21 +20,25 @@
 Compatibility helpers so this provider works on both Airflow 2.x and 3.x
 without triggering deprecation warnings.
 
-On Airflow 3, ``AirflowFailException`` and ``AirflowTaskTimeout`` moved from
-``airflow.exceptions`` to ``airflow.sdk.exceptions``, and importing them from
-the old location raises a UserWarning. ``AirflowException`` did not move.
+On later Airflow 3.x releases, ``AirflowFailException`` and
+``AirflowTaskTimeout`` moved from ``airflow.exceptions`` to
+``airflow.sdk.exceptions``, and importing them from the old location raises
+a UserWarning. ``AirflowException`` did not move.
+
+The move did not happen consistently across every Airflow 3.x sub-version
+(e.g. Airflow 3.1.x still exposes them only from ``airflow.exceptions``,
+while later releases moved them to ``airflow.sdk.exceptions``), so we try the
+new location first and gracefully fall back to the old one instead of
+branching on the Airflow major version number.
 """
 
 from __future__ import annotations
 
-from airflow import __version__ as _airflow_version
 from airflow.exceptions import AirflowException
 
-_AIRFLOW_MAJOR_VERSION = int(_airflow_version.split('.')[0])
-
-if _AIRFLOW_MAJOR_VERSION < 3:
-    from airflow.exceptions import AirflowFailException, AirflowTaskTimeout
-else:
+try:
     from airflow.sdk.exceptions import AirflowFailException, AirflowTaskTimeout
+except ImportError:
+    from airflow.exceptions import AirflowFailException, AirflowTaskTimeout
 
 __all__ = ["AirflowException", "AirflowFailException", "AirflowTaskTimeout"]
