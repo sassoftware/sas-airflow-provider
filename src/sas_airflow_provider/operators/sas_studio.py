@@ -163,7 +163,10 @@ class SASStudioOperator(BaseOperator):
         if self.on_failure_callback == None:
            self.on_failure_callback=[on_failure]
         else:
-            self.on_failure_callback=[on_failure, self.on_failure_callback]
+            if isinstance(self.on_failure_callback, list):
+                self.on_failure_callback=[on_failure] + self.on_failure_callback
+            else:
+                self.on_failure_callback=[on_failure, self.on_failure_callback]
         
         self.on_retry_callback=[on_retry]
 
